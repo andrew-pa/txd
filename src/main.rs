@@ -1,7 +1,7 @@
+#![feature(linked_list_extras)]
 extern crate pancurses;
 
 use std::collections::LinkedList;
-use std::rc::Rc;
 use pancurses::*;
 
 /* 
@@ -12,7 +12,7 @@ use pancurses::*;
 
 struct State {
     cur_x: i32, cur_y: i32,
-    cur_buf: Box<Buffer>, cur_mode: Box<Mode>
+    cur_buf: Box<Buffer>
 }
 
 struct Buffer {
@@ -32,35 +32,40 @@ impl Buffer {
 }
 
 trait Mode {
-    fn handle_input(&self, i: Input, s: State) -> State;
+    fn handle_input(&self, i: Input, s: &mut State) -> Option<Box<Mode>>;
     fn draw(&self, win: &Window);
 }
 
 struct NormalMode {}
-//struct InsertMode {}
+struct InsertMode {}
 
 impl Mode for NormalMode {
-    fn handle_input(&self, i: Input, s: State) -> State {
+    fn handle_input(&self, i: Input, s: &mut State) -> Option<Box<Mode>> {
         match i {
-            Input::Character('h') => State { cur_x: s.cur_x - 1, ..s },
-            Input::Character('j') => State { cur_x: s.cur_y + 1, ..s },
-            Input::Character('k') => State { cur_x: s.cur_y - 1, ..s },
-            Input::Character('l') => State { cur_x: s.cur_x + 1, ..s },
-            Input::Character('i') => {
-     //           s.cur_mode = Rc::new(InsertMode{})
-                s
+            Input::Character('h') => { s.cur_x -= 1; None },
+            Input::Character('j') => { s.cur_y += 1; None },
+            Input::Character('k') => { s.cur_y -= 1; None },
+            Input::Character('l') => { s.cur_x += 1; None },
+            Input::Character('i') => Some(Box::new(InsertMode{})),
+            Input::Character('o') => { 
+                s.cur_x = 0; s.cur_y += 1;
+                let mut back = s.cur_buf.lines.split_off(s.cur_y as usize);
+                s.cur_buf.lines.push_back(String::from(""));
+                s.cur_buf.lines.append(&mut back);
+                Some(Box::new(InsertMode{}))
             },
-            _ => s
+            _ => None
         }
     }
     fn draw(&self, win: &Window) {
-        win.mvprintw(win.get_max_y(), 0, "NORMAL");
+        win.mvprintw(win.get_max_y()-1, 0, "NORMAL");
     }
 }
-/*
+
 impl Mode for InsertMode {
-    fn handle_input(&self, i: Input, s: &mut State) {
+    fn handle_input(&self, i: Input, s: &mut State) -> Option<Box<Mode>> {
         match i {
+            Input::Character('\x1B') => Some(Box::new(NormalMode{})),
             Input::Character(c) => {
                 if !c.is_control() {
                     s.cur_buf.lines.iter_mut().nth(s.cur_y as usize).unwrap().insert(s.cur_x as usize, c);
@@ -69,40 +74,45 @@ impl Mode for InsertMode {
                     s.cur_buf.lines.iter_mut().nth(s.cur_y as usize).unwrap().remove(s.cur_x as usize - 1);
                     s.cur_x -= 1
                 }
+                None
             },
-            _ => ()
+            _ => None
         }
     }
 
     fn draw(&self, win: &Window) {
-        win.mvprintw(win.get_max_y(), 0, "INSERT");
+        win.mvprintw(win.get_max_y()-1, 0, "INSERT");
     }
-}*/
+}
 
 fn main() {
     let window = initscr();
     window.refresh();
     window.keypad(true);
-    window.nodelay(true);
+   // window.nodelay(true);
     noecho();
 
     let mut state = State {
         cur_x: window.get_cur_x(), cur_y: window.get_cur_y(),
-        cur_buf: Box::new(Buffer::new()), cur_mode: Box::new(NormalMode{})
+        cur_buf: Box::new(Buffer::new())
     };
+    let mut cur_mode : Box<Mode> = Box::new(NormalMode{});
     state.cur_buf.lines.push_front(String::from("This is the first line in the buffer!"));
     state.cur_buf.lines.push_front(String::from("This is the second line in the buffer!"));
     loop {
         match window.getch() {
             Some(Input::KeyDC) => break,
-            Some(i) => {
-                let new_state = state.cur_mode.handle_input(i, state);
-                state = new_state;
+            Some(i) => { 
+                let nm = cur_mode.handle_input(i, &mut state); 
+                match nm {
+                    Some(mode) => { cur_mode = mode },
+                    None => ()
+                }
             },
             None => ()
         }
         window.clear();
-        state.cur_mode.draw(&window);
+        cur_mode.draw(&window);
         state.cur_buf.draw((0,0), &window);
         window.mv(state.cur_y, state.cur_x);
         window.refresh();
