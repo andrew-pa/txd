@@ -12,7 +12,8 @@ use pancurses::*;
 
 struct State {
     cur_x: i32, cur_y: i32,
-    cur_buf: Box<Buffer>
+    cur_buf: Box<Buffer>, win: Window,
+    should_quit: bool
 }
 
 struct Buffer {
@@ -32,15 +33,18 @@ impl Buffer {
 }
 
 trait Mode {
-    fn handle_input(&self, i: Input, s: &mut State) -> Option<Box<Mode>>;
+    fn handle_input(&mut self, i: Input, s: &mut State) -> Option<Box<Mode>>;
     fn draw(&self, win: &Window);
 }
 
 struct NormalMode {}
 struct InsertMode {}
+struct CommandMode {
+    buf: String, old_cur: (i32,i32)
+}
 
 impl Mode for NormalMode {
-    fn handle_input(&self, i: Input, s: &mut State) -> Option<Box<Mode>> {
+    fn handle_input(&mut self, i: Input, s: &mut State) -> Option<Box<Mode>> {
         match i {
             Input::Character('h') => { s.cur_x -= 1; None },
             Input::Character('j') => { s.cur_y += 1; None },
@@ -54,6 +58,11 @@ impl Mode for NormalMode {
                 s.cur_buf.lines.append(&mut back);
                 Some(Box::new(InsertMode{}))
             },
+            Input::Character(':') => {
+                let r : Box<Mode> = Box::new(CommandMode{buf: String::from(""), old_cur:(s.cur_x,s.cur_y)});
+                s.cur_x = 0; s.cur_y = s.win.get_max_y()-1;
+                Some(r)
+            },
             _ => None
         }
     }
@@ -63,7 +72,7 @@ impl Mode for NormalMode {
 }
 
 impl Mode for InsertMode {
-    fn handle_input(&self, i: Input, s: &mut State) -> Option<Box<Mode>> {
+    fn handle_input(&mut self, i: Input, s: &mut State) -> Option<Box<Mode>> {
         match i {
             Input::Character('\x1B') => Some(Box::new(NormalMode{})),
             Input::Character(c) => {
@@ -85,6 +94,46 @@ impl Mode for InsertMode {
     }
 }
 
+impl CommandMode {
+    fn run_command(&mut self, s: &mut State) -> Option<Box<Mode>> {
+        if self.buf.chars().next() == Some('q') { s.should_quit = true; }
+        None
+    }
+}
+
+impl Mode for CommandMode {
+    fn handle_input(&mut self, i: Input, s: &mut State) -> Option<Box<Mode>> {
+        match i {
+            Input::Character('\x1B') => {
+                s.cur_x = self.old_cur.0;
+                s.cur_y = self.old_cur.1;
+                Some(Box::new(NormalMode{}))
+            },
+            Input::Character('\n')=> {
+                s.cur_x = self.old_cur.0;
+                s.cur_y = self.old_cur.1;
+                self.run_command(s).or(Some(Box::new(NormalMode{})))
+            }
+            Input::Character(c) => {
+                if !c.is_control() {
+                    self.buf.insert(s.cur_x as usize, c);
+                    s.cur_x += 1
+                } else if c == '\x08' {
+                    self.buf.remove(s.cur_x as usize - 1);
+                    s.cur_x -= 1
+                }
+                None
+            },
+            _ => None
+        }
+    }
+
+    fn draw(&self, win: &Window) {
+        win.mvprintw(win.get_max_y()-1, 0, &self.buf);
+    }
+}
+
+
 fn main() {
     let window = initscr();
     window.refresh();
@@ -94,14 +143,13 @@ fn main() {
 
     let mut state = State {
         cur_x: window.get_cur_x(), cur_y: window.get_cur_y(),
-        cur_buf: Box::new(Buffer::new())
+        cur_buf: Box::new(Buffer::new()), win: window, should_quit: false
     };
     let mut cur_mode : Box<Mode> = Box::new(NormalMode{});
     state.cur_buf.lines.push_front(String::from("This is the first line in the buffer!"));
     state.cur_buf.lines.push_front(String::from("This is the second line in the buffer!"));
-    loop {
-        match window.getch() {
-            Some(Input::KeyDC) => break,
+    while !state.should_quit {
+        match state.win.getch() {
             Some(i) => { 
                 let nm = cur_mode.handle_input(i, &mut state); 
                 match nm {
@@ -111,11 +159,11 @@ fn main() {
             },
             None => ()
         }
-        window.clear();
-        cur_mode.draw(&window);
-        state.cur_buf.draw((0,0), &window);
-        window.mv(state.cur_y, state.cur_x);
-        window.refresh();
+        state.win.clear();
+        cur_mode.draw(&state.win);
+        state.cur_buf.draw((0,0), &state.win);
+        state.win.mv(state.cur_y, state.cur_x);
+        state.win.refresh();
     }
     endwin();
 }
