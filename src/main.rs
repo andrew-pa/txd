@@ -1,6 +1,10 @@
 #![feature(linked_list_extras)]
 extern crate pancurses;
 
+use std::path::{Path,PathBuf};
+use std::io::*;
+use std::io::prelude::*;
+use std::fs::File;
 use std::collections::LinkedList;
 use pancurses::*;
 
@@ -11,18 +15,49 @@ use pancurses::*;
  */
 
 struct State {
-    cur_x: i32, cur_y: i32,
+    cur_x: usize, cur_y: usize,
     cur_buf: Box<Buffer>, win: Window,
     should_quit: bool
 }
 
 struct Buffer {
+    fs_loc: PathBuf,
+    file: Option<File>,
     lines: LinkedList<String>
 }
 
 impl Buffer {
     fn new() -> Buffer {
-        Buffer { lines: LinkedList::new() }
+        Buffer { fs_loc: PathBuf::new(), file: None, lines: LinkedList::new() }
+    }
+
+    fn load(fp: &Path) -> Buffer {
+        let mut f = File::open(fp).unwrap();
+        let mut s : String = String::new();
+        f.read_to_string(&mut s);
+        let mut buf = Buffer {
+            fs_loc: PathBuf::from(fp),
+            file: Some(f),
+            lines: LinkedList::new()
+        };
+        for ln in s.lines() {
+            buf.lines.push_back(String::from(ln));
+        }
+        buf
+    }
+
+    fn insert_line(&mut self, y: usize, s: Option<String>) {
+        let mut back = self.lines.split_off(y);
+        self.lines.push_back(s.unwrap_or(String::from("")));
+        self.lines.append(&mut back);
+    }
+
+    fn insert_char(&mut self, c: char, (x,y): (usize,usize)) {
+        self.lines.iter_mut().nth(y).unwrap().insert(x, c);
+    }
+
+    fn remove_char(&mut self, (x,y): (usize,usize)) {
+        self.lines.iter_mut().nth(y).unwrap().remove(x);
     }
 
     fn draw(&self, (x0,y0): (i32,i32), win: &Window) {
@@ -40,7 +75,7 @@ trait Mode {
 struct NormalMode {}
 struct InsertMode {}
 struct CommandMode {
-    buf: String, old_cur: (i32,i32)
+    buf: String, old_cur: (usize,usize)
 }
 
 impl Mode for NormalMode {
@@ -53,21 +88,19 @@ impl Mode for NormalMode {
             Input::Character('i') => Some(Box::new(InsertMode{})),
             Input::Character('o') => { 
                 s.cur_x = 0; s.cur_y += 1;
-                let mut back = s.cur_buf.lines.split_off(s.cur_y as usize);
-                s.cur_buf.lines.push_back(String::from(""));
-                s.cur_buf.lines.append(&mut back);
+                s.cur_buf.insert_line(s.cur_y, None);
                 Some(Box::new(InsertMode{}))
             },
             Input::Character(':') => {
                 let r : Box<Mode> = Box::new(CommandMode{buf: String::from(""), old_cur:(s.cur_x,s.cur_y)});
-                s.cur_x = 0; s.cur_y = s.win.get_max_y()-1;
+                s.cur_x = 0; s.cur_y = s.win.get_max_y()as usize-1;
                 Some(r)
             },
             _ => None
         }
     }
     fn draw(&self, win: &Window) {
-        win.mvprintw(win.get_max_y()-1, 0, "NORMAL");
+        win.mvprintw(win.get_max_y()-2, 0, "NORMAL");
     }
 }
 
@@ -77,10 +110,10 @@ impl Mode for InsertMode {
             Input::Character('\x1B') => Some(Box::new(NormalMode{})),
             Input::Character(c) => {
                 if !c.is_control() {
-                    s.cur_buf.lines.iter_mut().nth(s.cur_y as usize).unwrap().insert(s.cur_x as usize, c);
+                    s.cur_buf.insert_char(c,(s.cur_x, s.cur_y));
                     s.cur_x += 1
                 } else if c == '\x08' {
-                    s.cur_buf.lines.iter_mut().nth(s.cur_y as usize).unwrap().remove(s.cur_x as usize - 1);
+                    s.cur_buf.remove_char((s.cur_x - 1, s.cur_y));
                     s.cur_x -= 1
                 }
                 None
@@ -90,7 +123,7 @@ impl Mode for InsertMode {
     }
 
     fn draw(&self, win: &Window) {
-        win.mvprintw(win.get_max_y()-1, 0, "INSERT");
+        win.mvprintw(win.get_max_y()-2, 0, "INSERT");
     }
 }
 
@@ -116,10 +149,10 @@ impl Mode for CommandMode {
             }
             Input::Character(c) => {
                 if !c.is_control() {
-                    self.buf.insert(s.cur_x as usize, c);
+                    self.buf.insert(s.cur_x, c);
                     s.cur_x += 1
                 } else if c == '\x08' {
-                    self.buf.remove(s.cur_x as usize - 1);
+                    self.buf.remove(s.cur_x - 1);
                     s.cur_x -= 1
                 }
                 None
@@ -129,6 +162,7 @@ impl Mode for CommandMode {
     }
 
     fn draw(&self, win: &Window) {
+        win.mvprintw(win.get_max_y()-2, 0, "COMMAND");
         win.mvprintw(win.get_max_y()-1, 0, &self.buf);
     }
 }
@@ -142,13 +176,22 @@ fn main() {
     noecho();
 
     let mut state = State {
-        cur_x: window.get_cur_x(), cur_y: window.get_cur_y(),
-        cur_buf: Box::new(Buffer::new()), win: window, should_quit: false
+        cur_x: window.get_cur_x() as usize, cur_y: window.get_cur_y() as usize,
+        cur_buf: Box::new(Buffer::load(Path::new("C:\\Users\\andre\\Source\\txd\\src\\main.rs"))), win: window, should_quit: false
     };
     let mut cur_mode : Box<Mode> = Box::new(NormalMode{});
-    state.cur_buf.lines.push_front(String::from("This is the first line in the buffer!"));
-    state.cur_buf.lines.push_front(String::from("This is the second line in the buffer!"));
+    /*state.cur_buf.lines.push_front(String::from("This is the first line in the buffer!"));
+    state.cur_buf.lines.push_front(String::from("This is the second line in the buffer!"));*/
     while !state.should_quit {
+        state.win.clear();
+        cur_mode.draw(&state.win);
+        state.win.mv(state.win.get_max_y()-2, 0);
+        state.win.chgat(-1, A_REVERSE, COLOR_WHITE);
+        //state.win.hline('_', 10000);
+        state.win.mv(0,0);
+        state.cur_buf.draw((0,0), &state.win);
+        state.win.mv(state.cur_y as i32, state.cur_x as i32);
+        state.win.refresh();
         match state.win.getch() {
             Some(i) => { 
                 let nm = cur_mode.handle_input(i, &mut state); 
@@ -159,11 +202,6 @@ fn main() {
             },
             None => ()
         }
-        state.win.clear();
-        cur_mode.draw(&state.win);
-        state.cur_buf.draw((0,0), &state.win);
-        state.win.mv(state.cur_y, state.cur_x);
-        state.win.refresh();
     }
     endwin();
 }
