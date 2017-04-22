@@ -23,12 +23,15 @@ struct State {
 struct Buffer {
     fs_loc: PathBuf,
     file: Option<File>,
-    lines: LinkedList<String>
+    lines: Vec<String>,
+    cur_line: usize,
+    cur_col: usize,
+    viewport_line: usize,
 }
 
 impl Buffer {
     fn new() -> Buffer {
-        Buffer { fs_loc: PathBuf::new(), file: None, lines: LinkedList::new() }
+        Buffer { fs_loc: PathBuf::new(), file: None, lines: Vec::new(), cur_line:0, cur_col:0, viewport_line:0 }
     }
 
     fn load(fp: &Path) -> Buffer {
@@ -38,32 +41,67 @@ impl Buffer {
         let mut buf = Buffer {
             fs_loc: PathBuf::from(fp),
             file: Some(f),
-            lines: LinkedList::new()
+            lines: s.lines().map(String::from).collect(),
+            cur_line:0,cur_col:0,viewport_line:0
         };
-        for ln in s.lines() {
+        /*for ln in s.lines() {
             buf.lines.push_back(String::from(ln));
-        }
+        }*/
         buf
     }
 
-    fn insert_line(&mut self, y: usize, s: Option<String>) {
-        let mut back = self.lines.split_off(y);
-        self.lines.push_back(s.unwrap_or(String::from("")));
-        self.lines.append(&mut back);
+    fn set_loca(&mut self, col: usize, line: usize) {
+        self.cur_line = if line >= self.lines.len() { self.lines.len().saturating_sub(1) } else { line };
+        assert!(self.cur_line < self.lines.len());
+        self.cur_col = if col > self.lines[self.cur_line].len() { self.lines[self.cur_line].len().saturating_sub(1) } else { col };
+        if self.cur_line < self.viewport_line {
+            self.viewport_line = self.cur_line;
+        } else if self.cur_line > self.viewport_line+22 {
+            self.viewport_line = self.cur_line;
+        }
     }
 
-    fn insert_char(&mut self, c: char, (x,y): (usize,usize)) {
-        self.lines.iter_mut().nth(y).unwrap().insert(x, c);
+    fn move_loca(&mut self, dx: isize, dy: isize) {
+        let x = self.cur_col as isize + dx; let y = self.cur_line as isize + dy;
+        self.set_loca(if x < 0 { 0 } else { x as usize }, if y < 0 { 0 } else { y as usize });
     }
 
-    fn remove_char(&mut self, (x,y): (usize,usize)) {
-        self.lines.iter_mut().nth(y).unwrap().remove(x);
+    fn insert_lined(&mut self, y: usize, s: Option<String>) {
+        self.lines.insert(y,s.unwrap_or(String::from("")));
+    }
+
+    fn insert_chard(&mut self, c: char, (x,y): (usize,usize)) {
+        self.lines[y].insert(x,c);
+    }
+
+    fn remove_chard(&mut self, (x,y): (usize,usize)) {
+        self.lines[y].remove(x);
+    }
+
+
+    fn insert_char(&mut self, c: char) {
+        let p =(self.cur_col, self.cur_line);
+        self.insert_chard(c, p);
+        self.move_loca(1,0);
+    }
+
+    fn backspace(&mut self) {
+        let p =(self.cur_col-1, self.cur_line); 
+        self.remove_chard(p);
+        self.move_loca(-1,0);
+    }
+
+    fn insert_line(&mut self, s: Option<String>) {
+        let y = self.cur_line;
+        self.insert_lined(y+1, s);
+        self.set_loca(0,y+1);
     }
 
     fn draw(&self, (x0,y0): (i32,i32), win: &Window) {
-        for (y,l) in (y0..).zip(self.lines.iter()) {
+        for (y,l) in (y0..).zip(self.lines.iter().skip(self.viewport_line).take(win.get_max_y()as usize-2)) {
             win.mvprintw(y, x0, l);
         }
+        win.mv((self.cur_line - self.viewport_line) as i32, self.cur_col as i32);
     }
 }
 
@@ -81,14 +119,13 @@ struct CommandMode {
 impl Mode for NormalMode {
     fn handle_input(&mut self, i: Input, s: &mut State) -> Option<Box<Mode>> {
         match i {
-            Input::Character('h') => { s.cur_x -= 1; None },
-            Input::Character('j') => { s.cur_y += 1; None },
-            Input::Character('k') => { s.cur_y -= 1; None },
-            Input::Character('l') => { s.cur_x += 1; None },
+            Input::Character('h') => { s.cur_buf.move_loca(-1,  0); None },
+            Input::Character('j') => { s.cur_buf.move_loca( 0,  1); None },
+            Input::Character('k') => { s.cur_buf.move_loca( 0, -1); None },
+            Input::Character('l') => { s.cur_buf.move_loca( 1,  0); None },
             Input::Character('i') => Some(Box::new(InsertMode{})),
             Input::Character('o') => { 
-                s.cur_x = 0; s.cur_y += 1;
-                s.cur_buf.insert_line(s.cur_y, None);
+                s.cur_buf.insert_line(None);
                 Some(Box::new(InsertMode{}))
             },
             Input::Character(':') => {
@@ -110,11 +147,9 @@ impl Mode for InsertMode {
             Input::Character('\x1B') => Some(Box::new(NormalMode{})),
             Input::Character(c) => {
                 if !c.is_control() {
-                    s.cur_buf.insert_char(c,(s.cur_x, s.cur_y));
-                    s.cur_x += 1
+                    s.cur_buf.insert_char(c);
                 } else if c == '\x08' {
-                    s.cur_buf.remove_char((s.cur_x - 1, s.cur_y));
-                    s.cur_x -= 1
+                    s.cur_buf.backspace();
                 }
                 None
             },
@@ -190,7 +225,7 @@ fn main() {
         //state.win.hline('_', 10000);
         state.win.mv(0,0);
         state.cur_buf.draw((0,0), &state.win);
-        state.win.mv(state.cur_y as i32, state.cur_x as i32);
+        //state.win.mv(state.cur_y as i32, state.cur_x as i32);
         state.win.refresh();
         match state.win.getch() {
             Some(i) => { 
@@ -205,53 +240,3 @@ fn main() {
     }
     endwin();
 }
-/*
-fn main() {
-  let window = initscr();
-  window.refresh();
-  window.keypad(true);
-  noecho();
-
-  let mut cur_x = window.get_cur_x();
-  let mut cur_y = window.get_cur_y();
-
- // let subwin = window.subwin(8,40,2,2).unwrap();
-  
-  //  subwin.border('|','|','-','-','+','+','+','+');
-    let mut buf = Buffer::new();
-    buf.lines.push_front(String::from("Hello, World! 1"));
-    buf.lines.push_front(String::from("Hello, World! 2"));
-    buf.lines.push_front(String::from("Hello, World! 3"));
-    buf.lines.push_front(String::from("Hello, World! 4"));
-  //  subwin.refresh();
-
-  loop {
-      match window.getch() {
-          Some(Input::KeyUp) => { cur_y -= 1 },
-          Some(Input::KeyDown) => { cur_y += 1 },
-          Some(Input::KeyLeft) => { cur_x -= 1 },
-          Some(Input::KeyRight) => { cur_x += 1 },
-          Some(Input::KeyBackspace) => {
-              buf.lines.iter_mut().nth(cur_y as usize).unwrap().remove(cur_x as usize);
-              cur_x -= 1
-          },
-          Some(Input::Character(c)) => {
-              if !c.is_control() {
-                buf.lines.iter_mut().nth(cur_y as usize).unwrap().insert(cur_x as usize, c);
-                cur_x += 1
-              } else if c == '\x08' {
-                buf.lines.iter_mut().nth(cur_y as usize).unwrap().remove(cur_x as usize - 1);
-                cur_x -= 1
-              }
-          },
-          Some(Input::KeyDC) => break,
-          Some(input) => { window.addstr(&format!("{:?}", input)); },
-          None => ()
-      }
-      window.clear();
-      buf.draw((0,0), &window);
-      window.mv(cur_y, cur_x);
-      window.refresh();
-  }
-  endwin();
-}*/
