@@ -20,22 +20,33 @@ impl Buffer {
     }
 
     pub fn load(fp: &Path) -> Buffer {
+        let fp_exists = fp.exists();
         let mut f = OpenOptions::new().read(true).write(true).create(true).open(fp).unwrap();
-        let mut s : String = String::new();
-        f.read_to_string(&mut s);
+        let lns = if fp_exists { 
+            let mut s : String = String::new();
+            f.read_to_string(&mut s);
+            s.lines().map(String::from).collect()
+        } else {
+            vec![String::from("~ new file ~")]
+        };
         let mut buf = Buffer {
             fs_loc: PathBuf::from(fp),
             file: Some(f),
-            lines: s.lines().map(String::from).collect(),
+            lines: lns,
             cur_line:0,cur_col:0,viewport_line:0
         };
         buf
     }
 
     pub fn sync_disk(&mut self) {
+        let lines = self.lines.iter();
         match self.file {
-            Some(ref f) => {
-
+            Some(ref mut f) => {
+                f.set_len(0); //truncate the file
+                for ln in lines {
+                    write!(f, "{}\n", ln);
+                }
+                f.sync_all();
             },
             None => { panic!("sync_disk with no file backing"); }
         }
@@ -80,6 +91,13 @@ impl Buffer {
         let p =(self.cur_col-1, self.cur_line); 
         self.remove_chard(p);
         self.move_loca(-1,0);
+    }
+    pub fn break_line(&mut self) {
+        if self.cur_col < self.lines[self.cur_line].len() {
+            self.insert_line(Some(self.lines[self.cur_line].split_off(self.cur_col)));
+        } else {
+            self.insert_line(None);
+        }
     }
 
     pub fn insert_line(&mut self, s: Option<String>) {

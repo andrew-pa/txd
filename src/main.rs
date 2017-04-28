@@ -23,7 +23,7 @@ fn main() {
     noecho();
 
     let mut state = State::init(window);
-    state.buffers.push(Buffer::load(Path::new("C:\\Users\\andre\\Source\\txd\\src\\main.rs")));
+    state.buffers.push(Buffer::new());//Buffer::load(Path::new("C:\\Users\\andre\\Source\\txd\\src\\main.rs")));
     let mut cur_mode : Box<Mode> = Box::new(mode::NormalMode{});
     while !state.should_quit {
         state.win.clear();
@@ -31,6 +31,7 @@ fn main() {
         state.win.mv(state.win.get_max_y()-2, 0);
         state.win.printw(cur_mode.status_text());
         state.win.addch('|');
+        state.win.addch(' ');
         state.win.printw(&state.current_buffer().fs_loc.to_string_lossy().into_owned());
         state.win.mv(state.win.get_max_y()-2, 0);
         state.win.chgat(-1, A_REVERSE, COLOR_WHITE);

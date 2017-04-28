@@ -24,6 +24,9 @@ impl CommandMode {
             self.buf.remove(0);
             s.cur_buf = self.buf.parse::<usize>().unwrap();
             Some(Box::new(NormalMode{}))
+        } else if self.buf.chars().next() == Some('w') {
+            s.buffers[s.cur_buf].sync_disk();
+            Some(Box::new(NormalMode{}))
         } else { None }
     }
 }
@@ -41,6 +44,11 @@ impl Mode for CommandMode {
                 s.cur_y = self.old_cur.1;
                 self.run_command(s).or(Some(Box::new(NormalMode{})))
             }
+            Input::KeyBackspace => {
+                    self.buf.remove(s.cur_x - 1);
+                    s.cur_x -= 1;
+                    None
+            },
             Input::Character(c) => {
                 if !c.is_control() {
                     self.buf.insert(s.cur_x, c);
