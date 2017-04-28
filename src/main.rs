@@ -1,4 +1,4 @@
-#![feature(linked_list_extras)]
+#!feature(linked_list_extras)]
 extern crate pancurses;
 
 use std::path::{Path,PathBuf};
@@ -8,6 +8,7 @@ use std::fs::File;
 use std::collections::LinkedList;
 use pancurses::*;
 
+//this is a second comment inserted with ted
 
 mod buffer;
 use buffer::*;
@@ -32,7 +33,11 @@ fn main() {
         state.win.printw(cur_mode.status_text());
         state.win.addch('|');
         state.win.addch(' ');
-        state.win.printw(&state.current_buffer().fs_loc.to_string_lossy().into_owned());
+        let pth_str = match state.current_buffer().fs_loc {
+            Some(ref path) => path.to_string_lossy().into_owned(),
+            None => String::from("[New File]")
+        };
+        state.win.printw(&pth_str);
         state.win.mv(state.win.get_max_y()-2, 0);
         state.win.chgat(-1, A_REVERSE, COLOR_WHITE);
         state.win.mv(0,0);

@@ -1,6 +1,6 @@
 use pancurses::*;
 use mode::*;
-use std::path::Path;
+use std::path::{Path,PathBuf};
 
 pub struct CommandMode {
     buf: String, old_cur: (usize,usize)
@@ -15,6 +15,7 @@ impl CommandMode {
     }
 
     fn run_command(&mut self, s: &mut State) -> Option<Box<Mode>> {
+        self.buf.trim();
         if self.buf.chars().next() == Some('q') { s.should_quit = true; None }
         else if self.buf.chars().next() == Some('e') {
             s.cur_buf = s.buffers.len();
@@ -25,6 +26,8 @@ impl CommandMode {
             s.cur_buf = self.buf.parse::<usize>().unwrap();
             Some(Box::new(NormalMode{}))
         } else if self.buf.chars().next() == Some('w') {
+            self.buf.remove(0);
+            if self.buf.len() > 0 { s.buffers[s.cur_buf].fs_loc = Some(PathBuf::from(&self.buf)); }
             s.buffers[s.cur_buf].sync_disk();
             Some(Box::new(NormalMode{}))
         } else { None }

@@ -6,8 +6,7 @@ use std::collections::LinkedList;
 use pancurses::Window;
 
 pub struct Buffer {
-    pub fs_loc: PathBuf,
-    file: Option<File>,
+    pub fs_loc: Option<PathBuf>,
     lines: Vec<String>,
     cur_line: usize,
     cur_col: usize,
@@ -16,22 +15,21 @@ pub struct Buffer {
 
 impl Buffer {
     pub fn new() -> Buffer {
-        Buffer { fs_loc: PathBuf::new(), file: None, lines: Vec::new(), cur_line:0, cur_col:0, viewport_line:0 }
+        Buffer { fs_loc: None, lines: vec![String::from("")], cur_line:0, cur_col:0, viewport_line:0 }
     }
 
     pub fn load(fp: &Path) -> Buffer {
         let fp_exists = fp.exists();
-        let mut f = OpenOptions::new().read(true).write(true).create(true).open(fp).unwrap();
+        let mut f = OpenOptions::new().read(true).write(true).open(fp).unwrap();
         let lns = if fp_exists { 
             let mut s : String = String::new();
             f.read_to_string(&mut s);
             s.lines().map(String::from).collect()
         } else {
-            vec![String::from("~ new file ~")]
+            vec![String::from("")]
         };
         let mut buf = Buffer {
-            fs_loc: PathBuf::from(fp),
-            file: Some(f),
+            fs_loc: Some(PathBuf::from(fp)),
             lines: lns,
             cur_line:0,cur_col:0,viewport_line:0
         };
@@ -40,9 +38,9 @@ impl Buffer {
 
     pub fn sync_disk(&mut self) {
         let lines = self.lines.iter();
-        match self.file {
-            Some(ref mut f) => {
-                f.set_len(0); //truncate the file
+        match self.fs_loc {
+            Some(ref path) => {
+                let mut f = OpenOptions::new().write(true).truncate(true).create(true).open(path.as_path()).unwrap();
                 for ln in lines {
                     write!(f, "{}\n", ln);
                 }
