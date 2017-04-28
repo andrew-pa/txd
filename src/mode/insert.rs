@@ -19,6 +19,8 @@ impl Mode for InsertMode {
                     s.cur_buf().insert_char(c);
                 } else if c == '\x08' {
                     s.cur_buf().backspace();
+                } else if c == '\n' {
+                    s.cur_buf().break_line();
                 }
                 None
             },

@@ -92,9 +92,12 @@ impl Buffer {
         self.remove_chard(p);
         self.move_loca(-1,0);
     }
+
     pub fn break_line(&mut self) {
-        if self.cur_col < self.lines[self.cur_line].len() {
-            self.insert_line(Some(self.lines[self.cur_line].split_off(self.cur_col)));
+        let x = self.cur_col; let y = self.cur_line;
+        if x < self.lines[y].len() {
+            let rest = self.lines[y].split_off(x);
+            self.insert_line(Some(rest));
         } else {
             self.insert_line(None);
         }
