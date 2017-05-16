@@ -1,11 +1,11 @@
-
+use std::error::Error;
 use pancurses::*;
 use buffer::*;
 
 pub struct State {
     pub cur_x: usize, pub cur_y: usize,
     pub cur_buf: usize, pub win: Window,
-    pub buffers: Vec<Buffer>,
+    pub buffers: Vec<Buffer>, pub usr_err: Option<Box<Error>>,
     pub should_quit: bool
 }
 
@@ -17,7 +17,7 @@ impl State {
             cur_y: 0,
             buffers: Vec::new(),
             cur_buf: 0,
-            should_quit: false
+            should_quit: false, usr_err: None
         }
     }
 

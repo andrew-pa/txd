@@ -8,7 +8,17 @@ use std::fs::File;
 use std::collections::LinkedList;
 use pancurses::*;
 
-//this is a second comment inserted with ted
+/*
+ * Need:
+ *  + Error handling!!
+ *  + Buffer indicator/listing
+ *  + text objects + better parsers for both normal&command mode commands
+ *  + deletion/change/replace
+ *  + custom virtual terminal control because pancurses incredibly questionable (Windows!)
+ *  + better handling for line wrapping
+ *  + find/replace/switch/regex
+ *  + syntax highlighting
+ */
 
 mod buffer;
 use buffer::*;
@@ -24,7 +34,7 @@ fn main() {
     noecho();
 
     let mut state = State::init(window);
-    state.buffers.push(Buffer::new());//Buffer::load(Path::new("C:\\Users\\andre\\Source\\txd\\src\\main.rs")));
+    state.buffers.push(Buffer::new());
     let mut cur_mode : Box<Mode> = Box::new(mode::NormalMode{});
     while !state.should_quit {
         state.win.clear();
@@ -40,12 +50,18 @@ fn main() {
         state.win.printw(&pth_str);
         state.win.mv(state.win.get_max_y()-2, 0);
         state.win.chgat(-1, A_REVERSE, COLOR_WHITE);
+        if let Some(ref e) = state.usr_err {
+            state.win.mvprintw(state.win.get_max_y()-1, 0, &format!("{}", e));
+            state.win.mv(state.win.get_max_y()-1, 0);
+            state.win.chgat(-1, A_COLOR, COLOR_GREEN);
+        }
         state.win.mv(0,0);
         state.current_buffer().draw((0,0), &state.win);
         state.win.refresh();
 
         match state.win.getch() {
             Some(i) => { 
+                if state.usr_err.is_some() { state.usr_err = None; }
                 let nm = cur_mode.handle_input(i, &mut state); 
                 match nm {
                     Some(mode) => { cur_mode = mode },

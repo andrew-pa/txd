@@ -1,6 +1,23 @@
 use pancurses::*;
 use mode::*;
 use std::path::{Path,PathBuf};
+use std::error::Error;
+use std::fmt;
+
+#[derive(Debug)]
+struct CommandError {
+    msg: String
+}
+
+impl Error for CommandError {
+    fn description(&self) -> &str { "invalid command" }
+}
+
+impl fmt::Display for CommandError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "error: {}", self.msg)
+    }
+}
 
 pub struct CommandMode {
     buf: String, old_cur: (usize,usize)
@@ -14,23 +31,25 @@ impl CommandMode {
         }
     }
 
-    fn run_command(&mut self, s: &mut State) -> Option<Box<Mode>> {
+    fn run_command(&mut self, s: &mut State) -> Result<Option<Box<Mode>>, Box<Error>> {
         self.buf.trim();
-        if self.buf.chars().next() == Some('q') { s.should_quit = true; None }
+        if self.buf.chars().next() == Some('q') { s.should_quit = true; Ok(None) }
         else if self.buf.chars().next() == Some('e') {
             s.cur_buf = s.buffers.len();
-            s.buffers.push(Buffer::load(Path::new(&self.buf[1..])));
-            Some(Box::new(NormalMode{}))
+            s.buffers.push(Buffer::load(Path::new(&self.buf[1..]))?);
+            Ok(Some(Box::new(NormalMode{})))
         } else if self.buf.chars().next() == Some('b') {
             self.buf.remove(0);
-            s.cur_buf = self.buf.parse::<usize>().unwrap();
-            Some(Box::new(NormalMode{}))
+            let cbf = self.buf.parse::<usize>()?;
+            if cbf > s.buffers.len() { return Err(Box::new(CommandError { msg: String::from("index beyond open buffers") })); }
+            s.cur_buf = cbf;
+            Ok(Some(Box::new(NormalMode{})))
         } else if self.buf.chars().next() == Some('w') {
             self.buf.remove(0);
             if self.buf.len() > 0 { s.buffers[s.cur_buf].fs_loc = Some(PathBuf::from(&self.buf)); }
-            s.buffers[s.cur_buf].sync_disk();
-            Some(Box::new(NormalMode{}))
-        } else { None }
+            s.buffers[s.cur_buf].sync_disk()?;
+            Ok(Some(Box::new(NormalMode{})))
+        } else { Ok(None) }
     }
 }
 
@@ -45,7 +64,13 @@ impl Mode for CommandMode {
             Input::Character('\n')=> {
                 s.cur_x = self.old_cur.0;
                 s.cur_y = self.old_cur.1;
-                self.run_command(s).or(Some(Box::new(NormalMode{})))
+                match self.run_command(s) {
+                    Ok(x) => x.or(Some(Box::new(NormalMode{}))),
+                    Err(e) => {
+                        s.usr_err = Some(e);
+                        Some(Box::new(NormalMode{}))
+                    }
+                }
             }
             Input::KeyBackspace => {
                     self.buf.remove(s.cur_x - 1);
