@@ -1,4 +1,4 @@
-use pancurses::*;
+use vtctl::*;
 use mode::*;
 use std::path::{Path,PathBuf};
 use std::error::Error;
@@ -94,7 +94,7 @@ impl Mode for CommandMode {
     fn status_text(&self) -> &str { "COMMAND" }
 
     fn draw(&self, win: &Window) {
-        win.mvprintw(win.get_max_y()-1, 0, &self.buf);
+        win.write_at(win.size().1-1, 0, &self.buf);
     }
 }
 

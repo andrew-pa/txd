@@ -1,5 +1,5 @@
-use pancurses::*;
 use buffer::*;
+use vtctl::*;
 use mode::*;
 
 pub struct NormalMode {}
@@ -18,7 +18,7 @@ impl Mode for NormalMode {
             },
             Input::Character(':') => {
                 let r : Box<Mode> = Box::new(command::CommandMode::new(s.cur_x, s.cur_y));
-                s.cur_x = 0; s.cur_y = s.win.get_max_y()as usize-1;
+                s.cur_x = 0; s.cur_y = s.win.size().1 - 1;
                 Some(r)
             },
             _ => None

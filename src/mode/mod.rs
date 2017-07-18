@@ -1,5 +1,5 @@
 use std::error::Error;
-use pancurses::*;
+use vtctl::*;
 use buffer::*;
 
 pub struct State {

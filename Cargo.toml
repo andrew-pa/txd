@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["Andrew <andrew.pa@outlook.com>"]
 
 [dependencies]
-pancurses = "*"
+vtctl = { path = "./vtctl" }

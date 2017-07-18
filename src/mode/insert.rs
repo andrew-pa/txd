@@ -1,4 +1,4 @@
-use pancurses::*;
+use vtctl::*;
 use buffer::*;
 use mode::*;
 

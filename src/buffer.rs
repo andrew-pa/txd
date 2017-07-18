@@ -2,7 +2,7 @@ use std::path::{Path,PathBuf};
 use std::io::{Read, Write, Error as IoError, ErrorKind};
 use std::fs::*;
 use std::collections::LinkedList;
-use pancurses::Window;
+use vtctl::Window;
 
 pub struct Buffer {
     pub fs_loc: Option<PathBuf>,
@@ -107,10 +107,10 @@ impl Buffer {
         self.set_loca(0,y+1);
     }
 
-    pub fn draw(&self, (x0,y0): (i32,i32), win: &Window) {
-        for (y,l) in (y0..).zip(self.lines.iter().skip(self.viewport_line).take(win.get_max_y()as usize-2)) {
-            win.mvprintw(y, x0, l);
+    pub fn draw(&self, (x0,y0): (usize,usize), win: &mut Window) {
+        for (y,l) in (y0..).zip(self.lines.iter().skip(self.viewport_line).take(win.size().1 - 2)) {
+            win.write_at(y, x0, l);
         }
-        win.mv((self.cur_line - self.viewport_line) as i32, self.cur_col as i32);
+        win.set_cur((self.cur_line - self.viewport_line), self.cur_col);
     }
 }
