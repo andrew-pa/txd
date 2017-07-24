@@ -18,13 +18,11 @@ impl Mode for NormalMode {
             },
             Input::Character(':') => {
                 let r : Box<Mode> = Box::new(command::CommandMode::new(s.cur_x, s.cur_y));
-                s.cur_x = 0; s.cur_y = s.win.size().1 - 1;
+                //s.cur_x = 0; s.cur_y = s.win.size().1 - 1;
                 Some(r)
             },
             _ => None
         }
     }
     fn status_text(&self) -> &str { "NORMAL" }
-    fn draw(&self, win: &Window) {
-    }
 }

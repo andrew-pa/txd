@@ -27,36 +27,37 @@ mod mode;
 use mode::*;
 
 fn main() {
-    let window = Window::new();
-
-    let mut state = State::init(window);
+    let mut window = Window::new();
+    let mut state = State::init();
     state.buffers.push(Buffer::new());
     let mut cur_mode : Box<Mode> = Box::new(mode::NormalMode{});
+       // window.write_at(3,6,"Hello, World!");
     while !state.should_quit {
-        let win_size = state.win.size();
-        state.win.clear();
-        cur_mode.draw(&state.win);
-        state.win.set_cur(0, win_size.1-2);
-        state.win.write_str(cur_mode.status_text());
-        state.win.write_char('|');
-        state.win.write_char(' ');
-        let pth_str = match state.current_buffer().fs_loc {
-            Some(ref path) => path.to_string_lossy().into_owned(),
-            None => String::from("[New File]")
-        };
-        state.win.write_str(&pth_str);
-        state.win.set_cur(0, win_size.1-2);
-        //state.win.chgat(-1, A_REVERSE, COLOR_WHITE);
-        if let Some(ref e) = state.usr_err {
-            state.win.write_at(win_size.1-1, 0, &format!("{}", e));
-            state.win.set_cur(0, win_size.1-1);
-            //state.win.chgat(-1, A_COLOR, COLOR_GREEN);
-        }
-        state.win.set_cur(0,0);
-        state.current_buffer().draw((0,0), &state.win);
-        state.win.refresh();
+        for i in window.inputs() {
+            let win_size = window.size();
+            window.clear();
+            cur_mode.draw(&mut window);
+            window.set_cur(0, win_size.1-2);
+            window.write_str(cur_mode.status_text());
+            window.write_char('|');
+            window.write_char(' ');
+            let pth_str = match state.current_buffer().fs_loc {
+                Some(ref path) => path.to_string_lossy().into_owned(),
+                None => String::from("[New File]")
+            };
+            window.write_str(&pth_str);
+            window.set_cur(0, win_size.1-2);
+            //window.chgat(-1, A_REVERSE, COLOR_WHITE);
+            if let Some(ref e) = state.usr_err {
+                window.write_at(win_size.1-1, 0, &format!("{}", e));
+                window.set_cur(0, win_size.1-1);
+                //window.chgat(-1, A_COLOR, COLOR_GREEN);
+            }
+            window.set_cur(0,0);
+            state.current_buffer().draw((0,0), &mut window);
+            window.refresh();
 
-        for i in state.win.inputs() {
+
             if state.usr_err.is_some() { state.usr_err = None; }
             let nm = cur_mode.handle_input(i, &mut state); 
             match nm {

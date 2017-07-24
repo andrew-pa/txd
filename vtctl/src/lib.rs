@@ -99,14 +99,18 @@ impl Window {
         print!("\x1b[{};{}m", vfg,vbg);//, vbg, if underline { 4 } else { 24 });
     }
     
-    pub fn clear(&self) {
+    pub fn clear(&mut self) {
         print!("\x1b[2J");
+        self.set_cur(0,0);
     }
 
     pub fn set_cur(&mut self, x: usize, y: usize) {
         self.cur_x = x;
         self.cur_y = y;
-        print!("\x1b[{},{}H", y, x);
+        unsafe {
+            SetConsoleCursorPosition(self.out, COORD {X: x as i16, Y: y as i16});
+        }
+        //print!("\x1b[{},{}H", y, x);
     }
 
     pub fn write_at(&mut self, y: usize, x: usize, s: &str) {
@@ -132,15 +136,22 @@ impl Window {
     }
 }
 
+use std::ptr::{null_mut, null};
 impl FmtWrite for Window {
     fn write_char(&mut self, c: char) -> Result<(), fmt::Error> {
         self.cur_x += 1;
-        print!("{}",c);
+        let mut buf = [0u16, 3];
+        c.encode_utf16(&mut buf);
+        unsafe {
+            WriteConsoleW(self.out, buf.as_ptr() as *const std::os::raw::c_void, 3u32, null_mut(), null_mut());
+        }
         Ok(())
     }
     fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
         self.cur_x += s.len();
-        print!("{}",s);
+        unsafe {
+            WriteConsoleW(self.out, s.encode_utf16().collect::<Vec<_>>().as_ptr() as *const std::os::raw::c_void, s.len() as u32, null_mut(), null_mut());
+        }
         Ok(())
     }
     fn write_fmt(&mut self, args: fmt::Arguments) -> Result<(), fmt::Error> {

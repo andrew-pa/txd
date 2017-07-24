@@ -29,7 +29,4 @@ impl Mode for InsertMode {
     }
 
     fn status_text(&self) -> &str { "INSERT" }
-
-    fn draw(&self, win: &Window) {
-    }
 }

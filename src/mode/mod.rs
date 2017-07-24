@@ -4,15 +4,14 @@ use buffer::*;
 
 pub struct State {
     pub cur_x: usize, pub cur_y: usize,
-    pub cur_buf: usize, pub win: Window,
+    pub cur_buf: usize,
     pub buffers: Vec<Buffer>, pub usr_err: Option<Box<Error>>,
     pub should_quit: bool
 }
 
 impl State {
-    pub fn init(win: Window) -> State {
+    pub fn init() -> State {
         State {
-            win: win,
             cur_x: 0,
             cur_y: 0,
             buffers: Vec::new(),
@@ -33,7 +32,7 @@ impl State {
 pub trait Mode {
     fn handle_input(&mut self, i: Input, s: &mut State) -> Option<Box<Mode>>;
     fn status_text(&self) -> &str;
-    fn draw(&self, win: &Window);
+    fn draw(&self, win: &mut Window) { }
 }
 
 pub mod normal;

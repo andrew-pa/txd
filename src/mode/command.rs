@@ -93,8 +93,9 @@ impl Mode for CommandMode {
 
     fn status_text(&self) -> &str { "COMMAND" }
 
-    fn draw(&self, win: &Window) {
-        win.write_at(win.size().1-1, 0, &self.buf);
+    fn draw(&self, win: &mut Window) {
+        let ymax = win.size().1;
+        win.write_at(ymax-1, 0, &self.buf);
     }
 }
 
