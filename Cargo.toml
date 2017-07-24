@@ -1,7 +1,6 @@
 [package]
 name = "txd"
 version = "0.1.0"
-authors = ["Andrew <andrew.pa@outlook.com>"]
+authors = ["Andrew Palmer <andrew.pa@outlook.com>"]
 
 [dependencies]
-vtctl = { path = "./vtctl" }
