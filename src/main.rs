@@ -1,4 +1,5 @@
 #![feature(vec_resize_default)]
+#![feature(box_patterns)]
 extern crate runic;
 
 use runic::{App, Window as SystemWindow, Event, RenderContext, Color, Point, Rect, Font, TextLayout, KeyCode};
@@ -28,28 +29,48 @@ impl Resources {
 
 trait Interface {
     fn event(&mut self, e: Event) -> bool; //handled?
-    fn paint(&mut self, rx: &mut RenderContext, res: &Resources);
+    fn paint(&self, rx: &mut RenderContext, res: &Resources);
 }
 
 struct Window {
     area: Rect,
+    active: bool,
     content: Box<Interface>
 }
 
+use std::fmt;
+impl fmt::Debug for Window {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Window")
+    }
+}
+
 impl Window {
+    fn new(content: Box<Interface>) -> Window {
+        Window {
+            area: Rect::xywh(0.0,0.0,0.0,0.0),
+            active: false,
+            content: content
+        }
+    }
 }
 
 impl Interface for Window {
     fn event(&mut self, e: Event) -> bool {
         match e {
             Event::Resize(_,_,s) => { self.area.w = s.x; self.area.h = s.y; },
+            Event::MouseMove(p,_) => {
+                self.active = self.area.contains(p);
+            }
             _ => {}
         }
         self.content.event(e)
     }
 
-    fn paint(&mut self, rx: &mut RenderContext, res: &Resources) {
-        rx.stroke_rect(self.area, Color::rgb(1.0, 1.0, 1.0), 1.0);
+    fn paint(&self, rx: &mut RenderContext, res: &Resources) {
+        if self.active {
+            rx.stroke_rect(Rect::xywh(self.area.x+6.0, self.area.y+6.0, self.area.w-12.0, self.area.h-12.0), Color::rgb(1.0, 0.0, 0.0), 2.0);
+        }
         rx.translate(Point::xy(self.area.x, self.area.y));
         self.content.paint(rx, res);
         rx.translate(Point::xy(0.0, 0.0));
@@ -78,17 +99,17 @@ impl TextEdit {
 
 impl Interface for TextEdit {
     fn event(&mut self, e: Event) -> bool { false }
-    fn paint(&mut self, rx: &mut RenderContext, res: &Resources) {
-        let mut dp = Point::xy(4.0,4.0);
+    fn paint(&self, rx: &mut RenderContext, res: &Resources) {
+        /*let mut dp = Point::xy(4.0,4.0);
         for line in self.viewport..(self.buf.lines.len()) {
             if let None = self.line_layouts[line] {
                 self.line_layouts[line] = Some(runic::TextLayout::new(rx, &self.buf.lines[line], &res.main_font, 512.0, 32.0).expect("create layout"));
             }
             let layout = self.line_layouts[line].as_ref().unwrap();
-            rx.draw_text_layout(dp, layout, Color::rgb(0.9, 0.9, 0.9));
+            rx.draw_text_layout(dp, layout, Color::rgb(0.9, 0.9, 0.9))
             let line_size = layout.bounds();
             dp.y += line_size.h;
-        }
+        }*/
     }
 }
 
@@ -96,41 +117,111 @@ struct TestInterface;
 
 impl Interface for TestInterface {
     fn event(&mut self, e: Event) -> bool { false }
-    fn paint(&mut self, rx: &mut RenderContext, res: &Resources) {
+    fn paint(&self, rx: &mut RenderContext, res: &Resources) {
         rx.draw_text(Rect::xywh(4.0,4.0,64.0,32.0), "Hello, World!",  Color::rgb(0.9, 0.5, 0.0), &res.main_font);
     }
 }
 
-#[derive(Clone, Debug)]
-enum WindowTree {
+use std::rc::Rc;
+
+#[derive(Debug)]
+enum WindowLayout {
     Split {
-       first: Box<WindowTree>, second: Box<WindowTree>,
-       percent: f32, orientation: u8
+       children: (Box<WindowLayout>, Box<WindowLayout>),
+       percent: f32, orientation: bool, bounds: Rect
     },
-    Leaf(usize) //index into window list
+    Leaf(Rc<Window>)
 }
 
-impl WindowTree {
-    fn find_split_containing_window(&mut self, window_index: usize) -> Option<(&mut WindowTree, u8)> {
+impl WindowLayout {
+    fn bounds(&self) -> Rect {
+        match *self {
+            WindowLayout::Leaf(ref win) => win.area,
+            WindowLayout::Split { bounds, .. } => bounds
+        }
+    }
+    fn recalculate(&mut self, bounds: Rect) {
         match self {
-            &mut WindowTree::Split { ref mut first, ref mut second, .. } => {
-                match **first {
-                    WindowTree::Leaf(idx) => { if idx == window_index { Some((self, 0)) } else { None } },
-                    WindowTree::Split{..} => { first.find_split_containing_window(window_index) }
-                }.or_else(move || match **second {
-                    WindowTree::Leaf(idx) => { if idx == window_index { Some((self, 1)) } else { None } },
-                    WindowTree::Split{..} => { second.find_split_containing_window(window_index) }
-                })
+            &mut WindowLayout::Leaf(ref mut win_) => { 
+                let win = Rc::get_mut(win_).unwrap();
+                win.area.x = bounds.x;
+                win.area.y = bounds.y;
+                win.event(Event::Resize(0,0,Point::xy(bounds.w, bounds.h)));
             },
-            &mut WindowTree::Leaf(_) => None
+            &mut WindowLayout::Split { children: (ref mut left, ref mut right), orientation, bounds: ref mut area, percent } => {
+                let (farea, sarea) = match orientation {
+                    true => (Rect::xywh(area.x, area.y, area.w*percent, area.h),
+                    Rect::xywh(area.x+area.w*percent, area.y, area.w*(1.0-percent), area.h)),
+                    false => (Rect::xywh(area.x, area.y, area.w, area.h*percent),
+                    Rect::xywh(area.x, area.y+area.h*percent, area.w, area.h*(1.0-percent))),
+                    _ => panic!()
+                };
+                *area = bounds;
+                left.recalculate(farea);
+                right.recalculate(sarea);
+            }
+        }
+    }
+    fn split_active(&mut self, ori: bool, win: Rc<Window>) {
+        match self {
+            &mut WindowLayout::Split { children: (ref mut left, ref mut right), .. } => {
+                if let box WindowLayout::Leaf(_) = *left {
+                    let mut window = match *left { box WindowLayout::Leaf(ref win) => win.clone(), _ => panic!() };
+                    if window.active {
+                        let area = window.area;
+                        *left = Box::new(WindowLayout::Split {
+                            children: (Box::new(WindowLayout::Leaf(window.clone())), Box::new(WindowLayout::Leaf(win))),
+                            orientation: ori, percent: 0.5, bounds: area
+                        });
+                        return;
+                    }
+                }
+                else if let box WindowLayout::Leaf(_) = *right {
+                    let mut window = match *right { box WindowLayout::Leaf(ref win) => win.clone(), _ => panic!() };
+                    if window.active {
+                        let area = window.area;
+                        *right = Box::new(WindowLayout::Split {
+                            children: (Box::new(WindowLayout::Leaf(window.clone())), Box::new(WindowLayout::Leaf(win))),
+                            orientation: ori, percent: 0.5, bounds: area
+                        });
+                        return;
+                    }
+                }
+                {
+                    left.split_active(ori, win.clone());
+                    right.split_active(ori, win.clone());
+                }
+            },
+            _ => {}
+        }
+    }
+    fn event(&mut self, e: Event) -> bool {
+        match *self {
+            WindowLayout::Leaf(ref mut win) => Rc::get_mut(win).unwrap().event(e),
+            WindowLayout::Split { children: (ref mut left, ref mut right), .. } => {
+                left.event(e) ||
+                right.event(e)
+            }
+        }
+    }
+    fn paint(&self, rx: &mut RenderContext, res: &Resources) {
+        match self {
+            &WindowLayout::Leaf(ref win) => win.paint(rx, res),
+            &WindowLayout::Split { children: (ref left, ref right), orientation, bounds, percent } => {
+                left.paint(rx, res);
+                right.paint(rx, res);
+                if orientation {
+                    rx.draw_line(Point::xy(bounds.x+bounds.w*percent, bounds.y), Point::xy(bounds.x+bounds.w*percent, bounds.y+bounds.h), Color::rgb(0.0, 0.2, 1.0), 2.0);
+                } else {
+                    rx.draw_line(Point::xy(bounds.x, bounds.y+bounds.h*percent), Point::xy(bounds.x+bounds.w, bounds.y+bounds.h*percent), Color::rgb(0.0, 1.0, 0.2), 2.0);
+                }
+            }
         }
     }
 }
 
 struct TxdApp {
-    windows: Vec<Window>,
-    active_window: usize,
-    layout: WindowTree,
+    layout: WindowLayout,
     res: Resources,
     ctrl_down: bool, ctrl_key: Option<char>
 }
@@ -138,78 +229,23 @@ struct TxdApp {
 impl TxdApp {
     fn init(rx: &mut RenderContext) -> TxdApp {
         let mut app = TxdApp { 
-            windows: vec![ 
-                Window{area: rx.bounds(), content: Box::new(TestInterface)},
-                Window{area: rx.bounds(), content: Box::new(TestInterface)},
-                Window{area: rx.bounds(), content: Box::new(TextEdit::new(Buffer { lines: vec![
-                    String::from("Hello, World!"),
-                    String::from("This is a text editor!"),
-                    String::from("A third line!")
-                ]}))}
-            ], 
-            active_window: 0, ctrl_down: false, ctrl_key: None,
+            ctrl_down: false, ctrl_key: None,
             res: Resources::init(rx).expect("load resources"),
-            layout: WindowTree::Split { 
-                first: Box::new(WindowTree::Split { 
-                    first: Box::new(WindowTree::Leaf(0)),
-                    second: Box::new(WindowTree::Leaf(1)),
-                    percent: 0.7, orientation: 1
-                }), 
-                second: Box::new(WindowTree::Leaf(2)), percent: 0.5, orientation: 0 }
+            layout: WindowLayout::Split { children: (Box::new(WindowLayout::Leaf(Rc::new(Window{ active: true, content: Box::new(TestInterface), area: rx.bounds() }))),
+                    Box::new(WindowLayout::Leaf(Rc::new(Window{ active: false, content: Box::new(TestInterface), area: rx.bounds() })))), orientation: true, percent: 0.5, bounds: rx.bounds() }
         };
-        let ly = app.layout.clone();
-        app.recalculate_layout(rx.bounds(), &ly);
+        app.layout.recalculate(rx.bounds());
         app
-    }
-
-    fn recalculate_layout(&mut self, area: Rect, tree: &WindowTree) {
-        match tree {
-            &WindowTree::Leaf(idx) => {
-                self.windows[idx].area.x = area.x;
-                self.windows[idx].area.y = area.y;
-                self.windows[idx].event(Event::Resize(0,0,Point::xy(area.w, area.h)));
-            },
-            &WindowTree::Split { ref first, ref second, percent, orientation } => {
-                let (farea, sarea) = match orientation {
-                    0 => (Rect::xywh(area.x, area.y, area.w*percent, area.h),
-                          Rect::xywh(area.x+area.w*percent, area.y, area.w*(1.0-percent), area.h)),
-                    1 => (Rect::xywh(area.x, area.y, area.w, area.h*percent),
-                          Rect::xywh(area.x, area.y+area.h*percent, area.w, area.h*(1.0-percent))),
-                    _ => panic!()
-                };
-                self.recalculate_layout(farea, &first);
-                self.recalculate_layout(sarea, &second);
-            }
-        }
-    }
-
-    fn add_new_window(&mut self, orientation: u8) {
-        println!("before = {:?}", self.layout);
-        match self.layout.find_split_containing_window(self.active_window) {
-            Some((&mut WindowTree::Split { ref mut first, ref mut second, .. }, side)) => {
-                let new_window = self.windows.len();
-                self.windows.push(Window { area: Rect::xywh(0.0,0.0,0.0,0.0), content: Box::new(TestInterface)});
-                let new_split = Box::new(WindowTree::Split {
-                    first: Box::new(WindowTree::Leaf(self.active_window)), second: Box::new(WindowTree::Leaf(new_window)),
-                    orientation: orientation, percent: 0.5
-                });
-                if side == 0 { *first = new_split; } else { *second = new_split; }
-            }
-            _ => panic!("!")
-        }
-        println!("after = {:?}", self.layout);
     }
 }
 
 impl App for TxdApp {
     fn event(&mut self, e: Event) {
-        let fw = self.active_window;
         if let Event::Resize(_,_,size) = e {
-            let ly = self.layout.clone();
-            self.recalculate_layout(Rect::xywh(0.0,0.0,size.x,size.y), &ly);
+            self.layout.recalculate(Rect::xywh(0.0,0.0,size.x,size.y));
             return;
         }
-        if self.windows[fw].event(e) { return; }
+        self.layout.event(e);
         /* handle events app-wide */
         match e {
             Event::Key(KeyCode::Ctrl, kd) => { if !kd { self.ctrl_key = None; } self.ctrl_down = kd; },
@@ -220,8 +256,16 @@ impl App for TxdApp {
                             println!("ctl {} {}", lc, c);
                             match lc {
                                 'W' => match c {
-                                    'S' => { self.add_new_window(0); } // split current window vertically
-                                    'E' => { self.add_new_window(1); } // split current window horizontally
+                                    'S' => {
+                                        self.layout.split_active(false, Rc::new(Window::new(Box::new(TestInterface))));
+                                        let b = self.layout.bounds();
+                                        self.layout.recalculate(b);
+                                    } // split current window vertically
+                                    'E' => {
+                                        self.layout.split_active(true, Rc::new(Window::new(Box::new(TestInterface))));
+                                        let b = self.layout.bounds();
+                                        self.layout.recalculate(b);
+                                    } // split current window horizontally
                                     'H' => {} // move left
                                     'J' => {} // move down
                                     'K' => {} // move up
@@ -230,12 +274,11 @@ impl App for TxdApp {
                                 },
                                 _ => {}
                             }
-                            self.ctrl_key = None;
                         } else {
                             println!("ctl {} 1", c);
                             self.ctrl_key = Some(c);
                         } 
-                    } else { self.ctrl_key = None; }
+                    } else {}
                 }
             }
             _ => {}
@@ -244,11 +287,7 @@ impl App for TxdApp {
 
     fn paint(&mut self, rx: &mut RenderContext) {
         rx.clear(Color::rgb(0.1, 0.1, 0.1));
-        for w in self.windows.iter_mut() {
-            w.paint(rx, &self.res);
-        }
-        let aw = self.active_window;
-        rx.stroke_rect(self.windows[aw].area, Color::rgb(0.8, 0.6, 0.0), 2.0);
+        self.layout.paint(rx, &self.res);
     }
 }
 
