@@ -36,7 +36,7 @@ impl Buffer {
             Some(ref path) => {
                 let mut f = OpenOptions::new().write(true).truncate(true).create(true).open(path.as_path())?;
                 for ln in lines {
-                    write!(f, "{}\n", ln);
+                    write!(f, "{}\n", ln)?;
                 }
                 f.sync_all()?;
                 Ok(())
