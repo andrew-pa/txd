@@ -2,7 +2,7 @@
 use runic::{App, Window as SystemWindow, Event, RenderContext, Color, Point, Rect, Font, TextLayout, KeyCode};
 use std::rc::Rc;
 use std::cell::RefCell;
-use super::Resources;
+use super::{Resources, Movement};
 use buffer::Buffer;
 
 pub struct BufferView {
@@ -49,6 +49,15 @@ impl BufferView {
 
         self.cursor_col = cursor_col as usize;
         self.cursor_line = cursor_line as usize;
+    }
+
+    pub fn make_movement(&mut self, mv: Movement) {
+        match mv {
+            Movement::Rep(count, smv) => for _ in 0..count { self.make_movement(*smv.clone()); },
+            Movement::Char(right) => self.move_cursor((if right {1} else {-1}, 0)),
+            Movement::Line(up) => self.move_cursor((0, if up {-1} else {1})),
+            _ => {}
+        }
     }
 
     pub fn invalidate_line(&mut self, line: usize) {

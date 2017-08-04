@@ -64,7 +64,7 @@ struct NormalMode {
     buf: String
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Movement {
     Char(bool),
     Line(bool),
@@ -89,8 +89,8 @@ impl Movement {
                 } else {
                     match c {
                         'h' => Some(Char(false)),
-                        'j' => Some(Line(true)),
-                        'k' => Some(Line(false)),
+                        'j' => Some(Line(false)),
+                        'k' => Some(Line(true)),
                         'l' => Some(Char(true)),
                         'w' => Some(Word(false, false)),
                         'b' => Some(Word(true, false)),
@@ -159,10 +159,14 @@ impl Mode for NormalMode {
                     _ => { }
                 }
                 if let Some(a) = Action::parse(&self.buf) {
-                    //println!("act {:?}", a);
                     self.buf.clear();
-                }
-                None
+                    match a {
+                        Action::Move(mv) => {
+                            bv.make_movement(mv); None
+                        },
+                        _ => { None }
+                    }
+                } else { None }
             },
             _ => { None }
         }
