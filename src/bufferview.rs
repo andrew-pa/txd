@@ -6,9 +6,9 @@ use super::Resources;
 use buffer::Buffer;
 
 pub struct BufferView {
-    buf: Rc<RefCell<Buffer>>,
-    res: Rc<RefCell<Resources>>,
-    pub line_layouts: Vec<Option<TextLayout>>,
+    pub buf: Rc<RefCell<Buffer>>,
+    pub res: Rc<RefCell<Resources>>,
+    line_layouts: Vec<Option<TextLayout>>,
     viewport_start: usize,
     viewport_end: usize,
     pub cursor_line: usize,
@@ -49,6 +49,10 @@ impl BufferView {
 
         self.cursor_col = cursor_col as usize;
         self.cursor_line = cursor_line as usize;
+    }
+
+    pub fn invalidate_line(&mut self, line: usize) {
+        self.line_layouts[line] = None;
     }
 
     pub fn paint(&mut self, mut rx: &mut RenderContext, bnd: Rect) {
