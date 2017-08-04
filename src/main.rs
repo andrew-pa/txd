@@ -42,28 +42,14 @@ impl Resources {
 mod bufferview;
 use bufferview::BufferView;
 
-trait Mode {
-    fn event(&mut self, e: Event, bv: &mut BufferView) -> Option<Box<Mode>>;
-    fn status_tag(&self) -> &str;
-}
+mod mode;
 
-// Normal Mode 
 // movements:
 // hjkl: ±1 char/line
 // w: forward one word
 // b: backward one word
 // e: forward one word, place at end
 // <number>[mov]: repeated movement n times
-// actions:
-// [mov]: move cursor
-// d[mov]: delete
-// i: insert text
-// c[mov]: change text
-// r[char]: replace char
-struct NormalMode {
-    buf: String
-}
-
 #[derive(Debug, Clone)]
 enum Movement {
     Char(bool),
@@ -104,81 +90,11 @@ impl Movement {
     }
 }
 
-
-#[derive(Debug)]
-enum Action {
-    Move(Movement),
-    Delete(Movement),
-    Change(Movement),
-    Insert,
-    Replace(char)
-}
-
-impl Action {
-    fn parse(s: &str) -> Option<Action> {
-        let mut cs = s.char_indices();
-        match cs.next() {
-            Some((i, c)) => {
-                //println!("i,c {} {}", i, c);
-                match c {
-                    'i' => Some(Action::Insert),
-                    'd' => Movement::parse(s.split_at(i+1).1).map(Action::Delete),
-                    'c' => Movement::parse(s.split_at(i+1).1).map(Action::Change),
-                    'r' => cs.next().map(|(_,c)| Action::Replace(c)),
-                    _ => Movement::parse(s).map(Action::Move),
-                }
-            },
-            None => None
-        }
-    }
-}
-
-impl NormalMode {
-    fn new() -> NormalMode {
-        NormalMode { buf: String::new() }
-    }
-}
-
-impl Mode for NormalMode {
-    fn event(&mut self, e: Event, bv: &mut BufferView) -> Option<Box<Mode>> {
-        match e {
-            Event::Key(k, d) => {
-                match k {
-                    /*KeyCode::Character('h') => { bv.move_cursor((-1, 0)); None }
-                      KeyCode::Character('j') => { bv.move_cursor((0, 1)); None }
-                      KeyCode::Character('k') => { bv.move_cursor((0, -1)); None }
-                      KeyCode::Character('l') => { bv.move_cursor((1, 0)); None }
-                      KeyCode::Character('x') => {
-                      let (co,li) = (bv.cursor_col, bv.cursor_line);
-                      bv.buf.borrow_mut().lines[li].remove(co);
-                      bv.invalidate_line(li);
-                      None
-                      }*/
-                    KeyCode::Character(c) => { self.buf.push(c); }
-                    KeyCode::Escape => { self.buf.clear(); }
-                    _ => { }
-                }
-                if let Some(a) = Action::parse(&self.buf) {
-                    self.buf.clear();
-                    match a {
-                        Action::Move(mv) => {
-                            bv.make_movement(mv); None
-                        },
-                        _ => { None }
-                    }
-                } else { None }
-            },
-            _ => { None }
-        }
-    }
-    fn status_tag(&self) -> &str { "NORMAL" }
-}
-
 struct TxdApp {
     buf: Rc<RefCell<Buffer>>,
     res: Rc<RefCell<Resources>>,
     ed: BufferView,
-    mode: Box<Mode>
+    mode: Box<mode::Mode>
 }
 
 impl TxdApp {
@@ -186,7 +102,7 @@ impl TxdApp {
         let buf = Rc::new(RefCell::new(Buffer::load(Path::new("src\\main.rs")).expect("open file")));
         let res = Rc::new(RefCell::new(Resources::new(rx).expect("create resources")));
         let ed = BufferView::new(buf.clone(), &mut rx, res.clone());
-        TxdApp { buf, res, ed, mode: Box::new(NormalMode::new()) }
+        TxdApp { buf, res, ed, mode: Box::new(mode::NormalMode::new()) }
     }
 }
 
