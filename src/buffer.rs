@@ -30,6 +30,10 @@ impl Buffer {
         Ok(buf)
     }
 
+    pub fn insert_char(&mut self, loc: (usize,usize), c: char) {
+        self.lines[loc.1].insert(loc.0, c);
+    }
+
     pub fn sync_disk(&mut self) -> Result<(), IoError> {
         let lines = self.lines.iter();
         match self.fs_loc {

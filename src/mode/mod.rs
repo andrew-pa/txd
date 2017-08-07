@@ -8,4 +8,6 @@ pub trait Mode {
 }
 
 mod normal;
-pub use self::normal::*;
+mod insert;
+pub use self::normal::NormalMode;
+pub use self::insert::InsertMode;

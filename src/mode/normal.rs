@@ -73,6 +73,9 @@ impl Mode for NormalMode {
                         Action::Move(mv) => {
                             bv.make_movement(mv); None
                         },
+                        Action::Insert => {
+                            Some(Box::new(InsertMode))
+                        },
                         _ => { None }
                     }
                 } else { None }
