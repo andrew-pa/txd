@@ -51,6 +51,10 @@ impl BufferView {
         self.cursor_line = cursor_line as usize;
     }
 
+    pub fn curr_loc(&self) -> (usize, usize) {
+        (self.cursor_col, self.cursor_line)
+    }
+
     pub fn make_movement(&mut self, mv: Movement) {
         match mv {
             Movement::Rep(count, smv) => for _ in 0..count { self.make_movement(*smv.clone()); },
@@ -62,6 +66,9 @@ impl BufferView {
 
     pub fn invalidate_line(&mut self, line: usize) {
         self.line_layouts[line] = None;
+    }
+    pub fn insert_line(&mut self, line: usize) {
+        self.line_layouts.insert(line, None);
     }
 
     pub fn paint(&mut self, mut rx: &mut RenderContext, bnd: Rect) {
@@ -92,9 +99,9 @@ impl BufferView {
 
         //draw cursor
         let col = self.cursor_col;
-        let mut cb = self.line_layouts[self.cursor_line].as_ref().unwrap().char_bounds(col);
+        let mut cb = self.line_layouts[self.cursor_line].as_ref().map_or(Rect::xywh(0.0, 0.0, 8.0, 8.0), |v| v.char_bounds(col));
         if cb.w == 0.0 { cb.w = 8.0; }
-        rx.fill_rect(cb.offset(Point::xy(bnd.x,bnd.y+cb.h*(self.cursor_line-self.viewport_start) as f32)),
+        rx.fill_rect(cb.offset(Point::xy(bnd.x,bnd.y+cb.h*(self.cursor_line.saturating_sub(self.viewport_start)) as f32)),
             Color::rgba(0.8, 0.6, 0.0, 0.9));
     }
 }

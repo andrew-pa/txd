@@ -18,6 +18,7 @@ use std::path::Path;
  *   + Command line
  *     + Good command parsing
  *   + Get resonable UX together (ie not opening src\main.rs at load)
+ *   + Error messages (Result instead of Option from Mode switch?)
  * + Make buffer rep more reasonable
  * + Configuration stuff (colors! fonts! commands?)
  * + Language Server Protocol

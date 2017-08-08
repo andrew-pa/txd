@@ -33,6 +33,17 @@ impl Buffer {
     pub fn insert_char(&mut self, loc: (usize,usize), c: char) {
         self.lines[loc.1].insert(loc.0, c);
     }
+    pub fn delete_char(&mut self, loc: (usize, usize)) {
+        self.lines[loc.1].remove(loc.0);
+    }
+    pub fn break_line(&mut self, loc: (usize, usize)) {
+        let new_line = if loc.0 >= self.lines[loc.1].len() {
+            String::from("")
+        } else {
+            self.lines[loc.1].split_off(loc.0)
+        };
+        self.lines.insert(loc.1+1, new_line);
+    }
 
     pub fn sync_disk(&mut self) -> Result<(), IoError> {
         let lines = self.lines.iter();

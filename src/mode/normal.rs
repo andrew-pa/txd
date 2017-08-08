@@ -19,7 +19,7 @@ enum Action {
     Move(Movement),
     Delete(Movement),
     Change(Movement),
-    Insert,
+    Insert, Append,
     Replace(char)
 }
 
@@ -31,6 +31,7 @@ impl Action {
                 //println!("i,c {} {}", i, c);
                 match c {
                     'i' => Some(Action::Insert),
+                    'a' => Some(Action::Append),
                     'd' => Movement::parse(s.split_at(i+1).1).map(Action::Delete),
                     'c' => Movement::parse(s.split_at(i+1).1).map(Action::Change),
                     'r' => cs.next().map(|(_,c)| Action::Replace(c)),
@@ -53,16 +54,6 @@ impl Mode for NormalMode {
         match e {
             Event::Key(k, d) => {
                 match k {
-                    /*KeyCode::Character('h') => { bv.move_cursor((-1, 0)); None }
-                      KeyCode::Character('j') => { bv.move_cursor((0, 1)); None }
-                      KeyCode::Character('k') => { bv.move_cursor((0, -1)); None }
-                      KeyCode::Character('l') => { bv.move_cursor((1, 0)); None }
-                      KeyCode::Character('x') => {
-                      let (co,li) = (bv.cursor_col, bv.cursor_line);
-                      bv.buf.borrow_mut().lines[li].remove(co);
-                      bv.invalidate_line(li);
-                      None
-                      }*/
                     KeyCode::Character(c) => { self.buf.push(c); }
                     KeyCode::Escape => { self.buf.clear(); }
                     _ => { }
@@ -76,6 +67,10 @@ impl Mode for NormalMode {
                         Action::Insert => {
                             Some(Box::new(InsertMode))
                         },
+                        Action::Append => {
+                            bv.move_cursor((1,0));
+                            Some(Box::new(InsertMode))
+                        }
                         _ => { None }
                     }
                 } else { None }
@@ -83,7 +78,7 @@ impl Mode for NormalMode {
             _ => { None }
         }
     }
-    fn status_tag(&self) -> &str { "NORMAL" }
+    fn status_tag(&self) -> &str { if self.buf.len() > 0 { &self.buf } else { "NORMAL" } }
 }
 
 

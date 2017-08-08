@@ -10,12 +10,36 @@ impl Mode for InsertMode {
         match e {
             Event::Key(k,false) => {
                 match k {
-                    KeyCode::Character(c) => {
-                        let loc = (bv.cursor_col, bv.cursor_line);
-                        bv.buf.borrow_mut().insert_char(loc, c);
-                        bv.cursor_col += 1;
+                    KeyCode::Enter => {
+                        let loc = bv.curr_loc(); 
+                        bv.buf.borrow_mut().break_line(loc);
+                        bv.invalidate_line(loc.1);
+                        bv.insert_line(loc.1);
+                        bv.cursor_col = 0;
+                        bv.move_cursor((0, 1));
+                        None
+                    }
+                    KeyCode::Delete => {
+                        let loc = bv.curr_loc();
+                        bv.buf.borrow_mut().delete_char(loc);
                         bv.invalidate_line(loc.1);
                         None
+                    }
+                    KeyCode::Backspace => {
+                        let loc = bv.curr_loc();
+                        bv.buf.borrow_mut().delete_char(loc);
+                        bv.move_cursor((-1, 0));
+                        bv.invalidate_line(loc.1);
+                        None
+                    }
+                    KeyCode::Character(c) => {
+                        if c.is_control() { None } else {
+                        let loc = bv.curr_loc();
+                        bv.buf.borrow_mut().insert_char(loc, c);
+                        bv.move_cursor((1, 0));
+                        bv.invalidate_line(loc.1);
+                        None
+                        }
                     }
                     KeyCode::Up => { bv.make_movement(Movement::Line(true)); None }
                     KeyCode::Down => { bv.make_movement(Movement::Line(false)); None }
