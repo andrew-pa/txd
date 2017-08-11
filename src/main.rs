@@ -122,6 +122,7 @@ impl App for TxdApp {
         self.ed.paint(rx, Rect::xywh(4.0, 4.0, bnd.w-4.0, bnd.h-34.0));
         rx.fill_rect(Rect::xywh(0.0, bnd.h-34.0, bnd.w, 18.0), Color::rgb(0.25, 0.22, 0.2));
         rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), Color::rgb(0.4, 0.6, 0.0), &self.res.borrow().font);
+        rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0), &format!("ln {} col {}", self.ed.cursor_line, self.ed.cursor_col), Color::rgb(0.0, 0.6, 0.4), &self.res.borrow().font);
     }
 }
 

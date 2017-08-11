@@ -34,7 +34,12 @@ impl Buffer {
         self.lines[loc.1].insert(loc.0, c);
     }
     pub fn delete_char(&mut self, loc: (usize, usize)) {
-        self.lines[loc.1].remove(loc.0);
+        if loc.0 >= self.lines[loc.1].len() {
+            self.lines[loc.1].pop();
+        }
+        else {
+            self.lines[loc.1].remove(loc.0);
+        }
     }
     pub fn break_line(&mut self, loc: (usize, usize)) {
         let new_line = if loc.0 >= self.lines[loc.1].len() {

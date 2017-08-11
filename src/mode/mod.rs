@@ -9,5 +9,7 @@ pub trait Mode {
 
 mod normal;
 mod insert;
+mod command;
 pub use self::normal::NormalMode;
 pub use self::insert::InsertMode;
+pub use self::command::CommandMode;

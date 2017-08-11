@@ -19,7 +19,7 @@ enum Action {
     Move(Movement),
     Delete(Movement),
     Change(Movement),
-    Insert, Append,
+    Insert, Append, Command,
     Replace(char)
 }
 
@@ -32,6 +32,7 @@ impl Action {
                 match c {
                     'i' => Some(Action::Insert),
                     'a' => Some(Action::Append),
+                    ';' => Some(Action::Command),
                     'd' => Movement::parse(s.split_at(i+1).1).map(Action::Delete),
                     'c' => Movement::parse(s.split_at(i+1).1).map(Action::Change),
                     'r' => cs.next().map(|(_,c)| Action::Replace(c)),
@@ -64,9 +65,8 @@ impl Mode for NormalMode {
                         Action::Move(mv) => {
                             bv.make_movement(mv); None
                         },
-                        Action::Insert => {
-                            Some(Box::new(InsertMode))
-                        },
+                        Action::Insert => Some(Box::new(InsertMode)),
+                        Action::Command => Some(Box::new(CommandMode)),
                         Action::Append => {
                             bv.move_cursor((1,0));
                             Some(Box::new(InsertMode))
