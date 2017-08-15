@@ -2,7 +2,8 @@
 use runic::{App, Window as SystemWindow, Event, RenderContext, Color, Point, Rect, Font, TextLayout, KeyCode};
 use std::rc::Rc;
 use std::cell::RefCell;
-use super::{Resources, Movement};
+use res::Resources;
+use movement::Movement;
 use buffer::Buffer;
 
 pub struct BufferView {

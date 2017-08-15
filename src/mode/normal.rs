@@ -1,7 +1,7 @@
 
 use super::*;
 use runic::{Event, KeyCode};
-use Movement;
+use movement::Movement;
 
 //Normal Mode
 pub struct NormalMode {
@@ -33,6 +33,7 @@ impl Action {
                     'i' => Some(Action::Insert),
                     'a' => Some(Action::Append),
                     ';' => Some(Action::Command),
+                    ':' => Some(Action::Command),
                     'd' => Movement::parse(s.split_at(i+1).1).map(Action::Delete),
                     'c' => Movement::parse(s.split_at(i+1).1).map(Action::Change),
                     'r' => cs.next().map(|(_,c)| Action::Replace(c)),
@@ -66,7 +67,7 @@ impl Mode for NormalMode {
                             bv.make_movement(mv); None
                         },
                         Action::Insert => Some(Box::new(InsertMode)),
-                        Action::Command => Some(Box::new(CommandMode)),
+                        Action::Command => Some(Box::new(CommandMode::new())),
                         Action::Append => {
                             bv.move_cursor((1,0));
                             Some(Box::new(InsertMode))
@@ -78,7 +79,8 @@ impl Mode for NormalMode {
             _ => { None }
         }
     }
-    fn status_tag(&self) -> &str { if self.buf.len() > 0 { &self.buf } else { "NORMAL" } }
+    fn status_tag(&self) -> &str { "NORMAL" }
+    fn pending_command(&self) -> Option<&str> { if self.buf.len() > 0 { Some(&self.buf) } else { None } }
 }
 
 

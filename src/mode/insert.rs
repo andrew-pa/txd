@@ -1,7 +1,7 @@
 
 use super::*;
 use runic::{Event,KeyCode};
-use Movement;
+use movement::Movement;
 
 pub struct InsertMode;
 
