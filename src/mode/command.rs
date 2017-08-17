@@ -10,16 +10,24 @@ impl CommandMode {
     pub fn new() -> CommandMode {
         CommandMode { buf: String::new() }
     }
+
+    pub fn execute(&self, app: &mut app::State) -> Option<Box<Mode>> {
+        match self.buf.chars().next() {
+            Some('q') => { println!("quit?"); Some(Box::new(NormalMode::new())) },
+            _ => None
+        }
+    }
 }
 
 impl Mode for CommandMode {
-    fn event(&mut self, e: Event, bv: &mut bufferview::BufferView) -> Option<Box<Mode>> {
+    fn event(&mut self, e: Event, app: &mut app::State) -> Option<Box<Mode>> {
         match e {
             Event::Key(k, false) => match k {
                 KeyCode::Character(c) => { self.buf.push(c); None }
                 KeyCode::Enter => {
+                    let r = self.execute(app);
                     self.buf.clear();
-                    None
+                    r
                 }
                 KeyCode::Escape => Some(Box::new(NormalMode::new())),
                 _ => None,

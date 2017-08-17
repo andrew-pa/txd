@@ -52,7 +52,7 @@ impl NormalMode {
 }
 
 impl Mode for NormalMode {
-    fn event(&mut self, e: Event, bv: &mut bufferview::BufferView) -> Option<Box<Mode>> {
+    fn event(&mut self, e: Event, app: &mut app::State) -> Option<Box<Mode>> {
         match e {
             Event::Key(k, d) => {
                 match k {
@@ -64,12 +64,12 @@ impl Mode for NormalMode {
                     self.buf.clear();
                     match a {
                         Action::Move(mv) => {
-                            bv.make_movement(mv); None
+                            app.ed.make_movement(mv); None
                         },
                         Action::Insert => Some(Box::new(InsertMode)),
                         Action::Command => Some(Box::new(CommandMode::new())),
                         Action::Append => {
-                            bv.move_cursor((1,0));
+                            app.ed.move_cursor((1,0));
                             Some(Box::new(InsertMode))
                         }
                         _ => { None }
