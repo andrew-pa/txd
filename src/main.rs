@@ -10,6 +10,7 @@ extern crate runic;
  *   + Error messages (Result instead of Option from Mode switch?)
  * + Make buffer rep more reasonable
  * + Configuration stuff (colors! fonts! commands?)
+ * + Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers
  * + Search (with regex) might be good; '/' command
  * + :s ed command?
  * + Language Server Protocol
@@ -20,7 +21,6 @@ extern crate runic;
  */
 
 mod buffer;
-mod bufferview;
 mod mode;
 mod res;
 mod app;

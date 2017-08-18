@@ -13,7 +13,11 @@ impl CommandMode {
 
     pub fn execute(&self, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
         match self.buf.chars().next() {
-            Some('q') => { win.quit();  Some(Box::new(NormalMode::new())) },
+            Some('q') => { win.quit(); Some(Box::new(NormalMode::new())) },
+            Some('w') => {
+                app.buf.borrow_mut().sync_disk().expect("sync buffer to disk");
+                Some(Box::new(NormalMode::new()))
+            },
             _ => None
         }
     }

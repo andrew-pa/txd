@@ -7,44 +7,35 @@ pub struct InsertMode;
 
 impl Mode for InsertMode {
     fn event(&mut self, e: Event, app: &mut app::State, _: WindowRef) -> Option<Box<Mode>> {
+        let mut buf = app.buf.borrow_mut();
+        let cloc = buf.curr_loc();
         match e {
             Event::Key(k,false) => {
                 match k {
                     KeyCode::Enter => {
-                        let loc = app.ed.curr_loc(); 
-                        app.ed.buf.borrow_mut().break_line(loc);
-                        app.ed.invalidate_line(loc.1);
-                        app.ed.insert_line(loc.1);
-                        app.ed.cursor_col = 0;
-                        app.ed.move_cursor((0, 1));
+                        buf.break_line(cloc);
                         None
                     }
                     KeyCode::Delete => {
-                        let loc = app.ed.curr_loc();
-                        app.ed.buf.borrow_mut().delete_char(loc);
-                        app.ed.invalidate_line(loc.1);
+                        buf.delete_char(cloc);
                         None
                     }
                     KeyCode::Backspace => {
-                        let loc = app.ed.curr_loc();
-                        app.ed.buf.borrow_mut().delete_char(loc);
-                        app.ed.move_cursor((-1, 0));
-                        app.ed.invalidate_line(loc.1);
+                        buf.delete_char(cloc);
+                        buf.move_cursor((-1, 0));
                         None
                     }
                     KeyCode::Character(c) => {
                         if c.is_control() { None } else {
-                        let loc = app.ed.curr_loc();
-                        app.ed.buf.borrow_mut().insert_char(loc, c);
-                        app.ed.move_cursor((1, 0));
-                        app.ed.invalidate_line(loc.1);
-                        None
+                            buf.insert_char(cloc, c);
+                            buf.move_cursor((1, 0));
+                            None
                         }
                     }
-                    KeyCode::Up => { app.ed.make_movement(Movement::Line(true)); None }
-                    KeyCode::Down => { app.ed.make_movement(Movement::Line(false)); None }
-                    KeyCode::Left => { app.ed.make_movement(Movement::Char(false)); None }
-                    KeyCode::Right => { app.ed.make_movement(Movement::Char(true)); None }
+                    KeyCode::Up => { buf.make_movement(Movement::Line(true)); None }
+                    KeyCode::Down => { buf.make_movement(Movement::Line(false)); None }
+                    KeyCode::Left => { buf.make_movement(Movement::Char(false)); None }
+                    KeyCode::Right => { buf.make_movement(Movement::Char(true)); None }
                     KeyCode::Escape => { Some(Box::new(NormalMode::new())) }
                     _ => None
                 }
