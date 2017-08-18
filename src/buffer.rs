@@ -30,7 +30,7 @@ impl Buffer {
         }
     }
 
-    pub fn load(fp: &Path, mut rx: &mut RenderContext, res: Rc<RefCell<Resources>>) -> Result<Buffer, IoError> {
+    pub fn load(fp: &Path, res: Rc<RefCell<Resources>>) -> Result<Buffer, IoError> {
         let fp_exists = fp.exists();
         let mut f = OpenOptions::new().read(true).write(true).open(fp)?;
         let (lns, lay) = if fp_exists { 
@@ -38,9 +38,8 @@ impl Buffer {
             f.read_to_string(&mut s)?;
             let lns: Vec<String> = s.lines().map(String::from).collect();
             let mut layouts = Vec::new();
-            let bnd = rx.bounds();
-            for ref line in lns.iter() {
-                layouts.push(TextLayout::new(&mut rx, &line, &res.borrow().font, bnd.w-4.0, bnd.h-4.0).ok()); //this error could be handled properly, but it is unlikely that an error will occur here anyways, so it is probably better to panic in that case
+            for _ in 0..lns.len() { //replace with Vec::resize_default?
+                layouts.push(None);
             }
             (lns, layouts)
         } else {

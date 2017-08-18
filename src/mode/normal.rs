@@ -64,12 +64,12 @@ impl Mode for NormalMode {
                     self.buf.clear();
                     match a {
                         Action::Move(mv) => {
-                            app.buf.borrow_mut().make_movement(mv); None
+                            app.mutate_buf(|b| b.make_movement(mv)); None
                         },
                         Action::Insert => Some(Box::new(InsertMode)),
                         Action::Command => Some(Box::new(CommandMode::new())),
                         Action::Append => {
-                            app.buf.borrow_mut().move_cursor((1,0));
+                            app.mutate_buf(|b| b.move_cursor((1,0)));
                             Some(Box::new(InsertMode))
                         }
                         _ => { None }

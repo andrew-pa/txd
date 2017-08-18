@@ -1,6 +1,10 @@
 
 use super::*;
 use runic::{Event, KeyCode, WindowRef};
+use std::rc::Rc;
+use std::cell::RefCell;
+use buffer::Buffer;
+use std::path::Path;
 
 pub struct CommandMode {
     buf: String
@@ -15,7 +19,18 @@ impl CommandMode {
         match self.buf.chars().next() {
             Some('q') => { win.quit(); Some(Box::new(NormalMode::new())) },
             Some('w') => {
-                app.buf.borrow_mut().sync_disk().expect("sync buffer to disk");
+                app.mutate_buf(|b| b.sync_disk()).expect("sync buffer to disk");
+                Some(Box::new(NormalMode::new()))
+            },
+            Some('e') => {
+                let (e, path) = self.buf.split_at(1);
+                app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app.res.clone()).expect("load buffer"))));
+                app.current_buffer = app.bufs.len()-1;
+                Some(Box::new(NormalMode::new()))
+            },
+            Some('b') => {
+                let (b, num) = self.buf.split_at(1);
+                app.current_buffer = num.trim().parse::<usize>().expect("valid integer");
                 Some(Box::new(NormalMode::new()))
             },
             _ => None

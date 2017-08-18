@@ -7,7 +7,8 @@ pub struct InsertMode;
 
 impl Mode for InsertMode {
     fn event(&mut self, e: Event, app: &mut app::State, _: WindowRef) -> Option<Box<Mode>> {
-        let mut buf = app.buf.borrow_mut();
+        let mut buf_ = app.buf();
+        let mut buf = buf_.borrow_mut();
         let cloc = buf.curr_loc();
         match e {
             Event::Key(k,false) => {
