@@ -29,15 +29,6 @@ mod movement;
 use runic::{App, Window as SystemWindow};
 use app::*;
 
-struct TestObj;
-
-impl Drop for TestObj {
-    fn drop(&mut self) {
-        println!("drop");
-    }
-}
-
 fn main() {
-    let to = TestObj;
     SystemWindow::new("txd", 1280, 640, TxdApp::init).expect("create window!").show();
 }

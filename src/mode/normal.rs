@@ -1,6 +1,6 @@
 
 use super::*;
-use runic::{Event, KeyCode};
+use runic::{Event, KeyCode, WindowRef};
 use movement::Movement;
 
 //Normal Mode
@@ -52,7 +52,7 @@ impl NormalMode {
 }
 
 impl Mode for NormalMode {
-    fn event(&mut self, e: Event, app: &mut app::State) -> Option<Box<Mode>> {
+    fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
         match e {
             Event::Key(k, d) => {
                 match k {

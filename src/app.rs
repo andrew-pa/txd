@@ -1,4 +1,4 @@
-use runic::{App, Window as SystemWindow, Event, RenderContext, Color, Point, Rect, Font, TextLayout, KeyCode};
+use runic::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
@@ -30,8 +30,8 @@ impl TxdApp {
 }
 
 impl App for TxdApp {
-    fn event(&mut self, e: Event) {
-        let nxm = self.mode.event(e, &mut self.state);
+    fn event(&mut self, e: Event, win: WindowRef) {
+        let nxm = self.mode.event(e, &mut self.state, win);
         match nxm {
             Some(new_mode) => { self.mode = new_mode }
             None => {}

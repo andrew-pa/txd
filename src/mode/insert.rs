@@ -1,12 +1,12 @@
 
 use super::*;
-use runic::{Event,KeyCode};
+use runic::{Event,KeyCode,WindowRef};
 use movement::Movement;
 
 pub struct InsertMode;
 
 impl Mode for InsertMode {
-    fn event(&mut self, e: Event, app: &mut app::State) -> Option<Box<Mode>> {
+    fn event(&mut self, e: Event, app: &mut app::State, _: WindowRef) -> Option<Box<Mode>> {
         match e {
             Event::Key(k,false) => {
                 match k {

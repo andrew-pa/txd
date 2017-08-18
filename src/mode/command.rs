@@ -1,6 +1,6 @@
 
 use super::*;
-use runic::{Event, KeyCode};
+use runic::{Event, KeyCode, WindowRef};
 
 pub struct CommandMode {
     buf: String
@@ -11,21 +11,21 @@ impl CommandMode {
         CommandMode { buf: String::new() }
     }
 
-    pub fn execute(&self, app: &mut app::State) -> Option<Box<Mode>> {
+    pub fn execute(&self, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
         match self.buf.chars().next() {
-            Some('q') => { println!("quit?"); Some(Box::new(NormalMode::new())) },
+            Some('q') => { win.quit();  Some(Box::new(NormalMode::new())) },
             _ => None
         }
     }
 }
 
 impl Mode for CommandMode {
-    fn event(&mut self, e: Event, app: &mut app::State) -> Option<Box<Mode>> {
+    fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
         match e {
             Event::Key(k, false) => match k {
                 KeyCode::Character(c) => { self.buf.push(c); None }
                 KeyCode::Enter => {
-                    let r = self.execute(app);
+                    let r = self.execute(app, win);
                     self.buf.clear();
                     r
                 }

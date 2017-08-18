@@ -3,7 +3,7 @@ use runic;
 use app;
 
 pub trait Mode {
-    fn event(&mut self, e: runic::Event, app: &mut app::State) -> Option<Box<Mode>>;
+    fn event(&mut self, e: runic::Event, app: &mut app::State, win: runic::WindowRef) -> Option<Box<Mode>>;
     fn status_tag(&self) -> &str;
     fn pending_command(&self) -> Option<&str> { None }
 }
