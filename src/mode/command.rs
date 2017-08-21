@@ -7,29 +7,33 @@ use buffer::Buffer;
 use std::path::Path;
 
 pub struct CommandMode {
-    buf: String
+    inserter: InsertMode
 }
 
 impl CommandMode {
-    pub fn new() -> CommandMode {
-        CommandMode { buf: String::new() }
+    pub fn new(app: &mut app::State) -> CommandMode {
+        app.bufs[0].borrow_mut().show_cursor = true;
+        CommandMode { inserter: InsertMode::new_with_target(0) }
     }
 
     pub fn execute(&self, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
-        match self.buf.chars().next() {
+        let cmd = { 
+            app.bufs[0].borrow().lines.last().unwrap().clone()
+        };
+        match cmd.chars().next() {
             Some('q') => { win.quit(); Some(Box::new(NormalMode::new())) },
             Some('w') => {
                 app.mutate_buf(|b| b.sync_disk()).expect("sync buffer to disk");
                 Some(Box::new(NormalMode::new()))
             },
             Some('e') => {
-                let (e, path) = self.buf.split_at(1);
+                let (e, path) = cmd.split_at(1);
                 app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app.res.clone()).expect("load buffer"))));
                 app.current_buffer = app.bufs.len()-1;
                 Some(Box::new(NormalMode::new()))
             },
             Some('b') => {
-                let (b, num) = self.buf.split_at(1);
+                let (b, num) = cmd.split_at(1);
                 app.current_buffer = num.trim().parse::<usize>().expect("valid integer");
                 Some(Box::new(NormalMode::new()))
             },
@@ -42,18 +46,26 @@ impl Mode for CommandMode {
     fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
         match e {
             Event::Key(k, false) => match k {
-                KeyCode::Character(c) => { self.buf.push(c); None }
                 KeyCode::Enter => {
                     let r = self.execute(app, win);
-                    self.buf.clear();
+                    let mut buf_ = &app.bufs[0];
+                    let mut buf = buf_.borrow_mut();
+                    let len = buf.lines.len();
+                    buf.show_cursor = false;
+                    buf.clear();
                     r
                 }
-                KeyCode::Escape => Some(Box::new(NormalMode::new())),
-                _ => None,
+                KeyCode::Escape => {
+                    let mut buf_ = &app.bufs[0];
+                    let mut buf = buf_.borrow_mut();
+                    buf.show_cursor = false;
+                    buf.clear();
+                    Some(Box::new(NormalMode::new()))
+                }
+                _ => self.inserter.event(e, app, win),
             }
-            _ => None,
+            _ => self.inserter.event(e, app, win),
         }
     }
     fn status_tag(&self) -> &str { "COMMAND" }
-    fn pending_command(&self) -> Option<&str> { if self.buf.len() > 0 { Some(&self.buf) } else { None } }
 }

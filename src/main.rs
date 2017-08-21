@@ -8,6 +8,8 @@ extern crate runic;
  *     + Good command parsing, at least the basics [quit/open file/write file/buffer managment]
  *   + Get resonable UX together (ie not opening src\main.rs at load)
  *   + Error messages (Result instead of Option from Mode switch?)
+ * + Delete/Change in Normal mode
+ * + Word/Paragraph movements
  * + Make buffer rep more reasonable
  * + Configuration stuff (colors! fonts! commands?)
  * + Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers

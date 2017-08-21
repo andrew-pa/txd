@@ -3,11 +3,21 @@ use super::*;
 use runic::{Event,KeyCode,WindowRef};
 use movement::Movement;
 
-pub struct InsertMode;
+pub struct InsertMode {
+    target_buffer: Option<usize>
+}
+
+impl InsertMode {
+    pub fn new() -> InsertMode { InsertMode { target_buffer: None } }
+    pub fn new_with_target(target: usize) -> InsertMode { InsertMode { target_buffer: Some(target) } }
+}
 
 impl Mode for InsertMode {
     fn event(&mut self, e: Event, app: &mut app::State, _: WindowRef) -> Option<Box<Mode>> {
-        let mut buf_ = app.buf();
+        let mut buf_ = match self.target_buffer {
+            Some(target) => app.bufs[target].clone(),
+            None => app.buf(),
+        };
         let mut buf = buf_.borrow_mut();
         let cloc = buf.curr_loc();
         match e {

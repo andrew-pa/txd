@@ -18,7 +18,8 @@ pub struct Buffer {
     viewport_start: usize,
     viewport_end: usize,
     pub cursor_line: usize,
-    pub cursor_col: usize
+    pub cursor_col: usize,
+    pub show_cursor: bool
 }
 
 impl Buffer {
@@ -26,7 +27,7 @@ impl Buffer {
         Buffer {
             fs_loc: None, lines: vec![String::from("")],
             res, cursor_line: 0, cursor_col: 0, viewport_start: 0, viewport_end: 0,
-            line_layouts: vec![None]
+            line_layouts: vec![None], show_cursor: true
         }
     }
 
@@ -47,7 +48,7 @@ impl Buffer {
         };
         let mut buf = Buffer {
             fs_loc: Some(PathBuf::from(fp)),
-            lines: lns, line_layouts: lay, viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, res
+            lines: lns, line_layouts: lay, viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true, res
         };
         Ok(buf)
     }
@@ -85,6 +86,13 @@ impl Buffer {
             _ => {}
         }
     }
+    
+    pub fn clear(&mut self) {
+        self.cursor_col = 0; self.cursor_line = 0;
+        self.lines.clear(); self.line_layouts.clear();
+        self.lines = vec![String::from("")];
+        self.line_layouts = vec![None];
+    }
 
     pub fn invalidate_line(&mut self, line: usize) {
         self.line_layouts[line] = None;
@@ -114,6 +122,11 @@ impl Buffer {
         self.line_layouts.insert(loc.1, None);
         self.cursor_col = 0; self.move_cursor((0,1));
     }
+    pub fn insert_line(&mut self, loc: usize) {
+        self.lines.insert(loc+1, String::from(""));
+        self.line_layouts.insert(loc, None);
+        self.cursor_col = 0; self.move_cursor((0,1));
+    }
 
     pub fn sync_disk(&mut self) -> Result<(), IoError> {
         let lines = self.lines.iter();
@@ -134,7 +147,7 @@ impl Buffer {
         //draw text
         let mut p = Point::xy(bnd.x, bnd.y);
         let mut line = self.viewport_start;
-        while p.y < bnd.h && line < self.line_layouts.len() {
+        while p.y < bnd.y+bnd.h && line < self.line_layouts.len() {
             let mut replace = false;
             match self.line_layouts[line] {
                 Some(ref l) => { 
@@ -157,11 +170,13 @@ impl Buffer {
         self.viewport_end = line;
 
         //draw cursor
-        let col = self.cursor_col;
-        let mut cb = self.line_layouts[self.cursor_line].as_ref().map_or(Rect::xywh(0.0, 0.0, 8.0, 8.0), |v| v.char_bounds(col));
-        if cb.w == 0.0 { cb.w = 8.0; }
-        rx.fill_rect(cb.offset(Point::xy(bnd.x,bnd.y+cb.h*(self.cursor_line.saturating_sub(self.viewport_start)) as f32)),
+        if self.show_cursor {
+            let col = self.cursor_col;
+            let mut cb = self.line_layouts[self.cursor_line].as_ref().map_or(Rect::xywh(0.0, 0.0, 8.0, 8.0), |v| v.char_bounds(col));
+            if cb.w == 0.0 { cb.w = 8.0; }
+            rx.fill_rect(cb.offset(Point::xy(bnd.x,bnd.y+cb.h*(self.cursor_line.saturating_sub(self.viewport_start)) as f32)),
             Color::rgba(0.8, 0.6, 0.0, 0.9));
+        }
     }
 
 }

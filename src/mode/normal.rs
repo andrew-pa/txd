@@ -66,11 +66,11 @@ impl Mode for NormalMode {
                         Action::Move(mv) => {
                             app.mutate_buf(|b| b.make_movement(mv)); None
                         },
-                        Action::Insert => Some(Box::new(InsertMode)),
-                        Action::Command => Some(Box::new(CommandMode::new())),
+                        Action::Insert => Some(Box::new(InsertMode::new())),
+                        Action::Command => Some(Box::new(CommandMode::new(app))),
                         Action::Append => {
                             app.mutate_buf(|b| b.move_cursor((1,0)));
-                            Some(Box::new(InsertMode))
+                            Some(Box::new(InsertMode::new()))
                         }
                         _ => { None }
                     }

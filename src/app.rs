@@ -11,7 +11,7 @@ use mode;
 pub struct State {
     pub bufs: Vec<Rc<RefCell<Buffer>>>,
     pub res: Rc<RefCell<Resources>>,
-    pub current_buffer: usize
+    pub current_buffer: usize,
 }
 
 impl State {
@@ -33,7 +33,9 @@ impl TxdApp {
     pub fn init(mut rx: &mut RenderContext) -> TxdApp {
         let res = Rc::new(RefCell::new(Resources::new(rx).expect("create resources")));
         let buf = Rc::new(RefCell::new(Buffer::load(Path::new("src\\main.rs"), res.clone()).expect("open file")));
-        TxdApp { state: State { bufs: vec![buf], current_buffer: 0, res }, mode: Box::new(mode::NormalMode::new()) }
+        let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
+        { cmd.borrow_mut().show_cursor = false; }
+        TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, res }, mode: Box::new(mode::NormalMode::new()) }
     }
 }
 
@@ -53,16 +55,22 @@ impl App for TxdApp {
         let mut buf = buf_.borrow_mut();
         let res = self.state.res.borrow();
         buf.paint(rx, Rect::xywh(4.0, 4.0, bnd.w-4.0, bnd.h-34.0));
+        
+        //draw status line
         rx.fill_rect(Rect::xywh(0.0, bnd.h-34.0, bnd.w, 18.0), Color::rgb(0.25, 0.22, 0.2));
         rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(),
                      Color::rgb(0.4, 0.6, 0.0), &res.font);
+        rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0), &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
+                     Color::rgb(0.9, 0.4, 0.0), &res.font);
         rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0),
                      &format!("ln {} col {}", buf.cursor_line, buf.cursor_col),
                      Color::rgb(0.0, 0.6, 0.4), &res.font);
+        //draw command line
         if let Some(cmd) = self.mode.pending_command() {
-            rx.draw_text(Rect::xywh(4.0, bnd.h-18.0, bnd.w, 18.0), cmd,
+            rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-18.0, bnd.w, 18.0), cmd,
                             Color::rgb(0.8, 0.8, 0.8), &res.font);
         }
+        self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, bnd.h-18.0, bnd.w-200.0, 20.0));
     }
 }
 
