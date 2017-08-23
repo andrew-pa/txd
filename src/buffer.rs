@@ -78,15 +78,80 @@ impl Buffer {
         (self.cursor_col, self.cursor_line)
     }
 
-    pub fn make_movement(&mut self, mv: Movement) {
+    // scan from cursor looking for character. possibly absurdly made and could be done better with
+    // a better buffer representation
+    pub fn scan_line<P: Fn(char)->bool>(&self, pred: P, forwards: bool) -> Option<isize> {
+        let (left, right) = self.lines[self.cursor_line].split_at(self.cursor_col + if forwards {1} else {0});
+        //println!("({}, {})", left, right);
+        (if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize)) })
+    }
+
+    pub fn movement_cursor_offset(&mut self, mv: Movement) -> (isize, isize) {
+        //println!("movement = {:?}", mv);
         match mv {
-            Movement::Rep(count, smv) => for _ in 0..count { self.make_movement(*smv.clone()); },
-            Movement::Char(right) => self.move_cursor((if right {1} else {-1}, 0)),
-            Movement::Line(up) => self.move_cursor((0, if up {-1} else {1})),
-            _ => {}
+            Movement::Char(right) => (if right {1} else {-1}, 0),
+            Movement::Line(up) => (0, if up {-1} else {1}),
+            Movement::WholeLine => (0, 1),
+            Movement::CharScan { query, forwards, place_besides } => {
+                match self.scan_line(|q| q==query, forwards) {
+                    Some(col) => (col + if place_besides { if forwards {-1} else {1} } else {0}, 0),
+                    None => (0,0)
+                }
+            }
+            Movement::Word(forwards, place_at_end) => {
+                // this is preliminary. code reuse is sad (copy-pasta from scan_line); additionally
+                // the definition of a word may change. Also new, more effecient buffer
+                // representations may make this operation much simpler/different
+                let pred = |q| !(char::is_alphanumeric(q) || q == '_');
+                let (left, right) = self.lines[self.cursor_line].split_at((self.cursor_col as isize + if forwards {1} else {-1}) as usize);
+                //println!("({}, {})", left, right);
+                match if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize + 1)) } {
+                    Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0} + 1, 0),
+                    None => (0,0)
+                }
+            },
+            Movement::EndOfLine => (self.lines[self.cursor_line].len() as isize-self.cursor_col as isize, 0),
+            Movement::StartOfLine => (0,0),
+            Movement::Rep(count, movement) => {
+                let mut offset = (0,0);
+                for _ in 0..count {
+                    let (dx, dy) = self.movement_cursor_offset(*movement.clone());
+                    offset.0 += dx; offset.1 += dy;
+                }
+                offset
+            }
         }
     }
-    
+
+    pub fn make_movement(&mut self, mv: Movement) {
+        let offset = self.movement_cursor_offset(mv);
+        //println!("offset = {:?}", offset);
+        self.move_cursor(offset)
+    }
+
+    pub fn delete_movement(&mut self, mv: Movement) {
+        match mv {
+            Movement::WholeLine => {
+                self.lines.remove(self.cursor_line);
+                self.line_layouts.remove(self.cursor_line);
+                return;
+            },
+            Movement::Rep(count, box Movement::WholeLine) => {
+                self.lines.drain(self.cursor_line..(self.cursor_line+count));
+                self.line_layouts.drain(self.cursor_line..(self.cursor_line+count));
+                return;
+            }, _ => {}
+        }
+        let offset = self.movement_cursor_offset(mv);
+        if offset.1 == 0 { //deleting within the current line
+            let last = (offset.0 + self.cursor_col as isize) as usize;
+            println!("deleting: {}, {}", self.cursor_col, last);
+            self.lines[self.cursor_line].drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last });
+            self.line_layouts[self.cursor_line] = None;
+        } else {
+        }
+    }
+
     pub fn clear(&mut self) {
         self.cursor_col = 0; self.cursor_line = 0;
         self.lines.clear(); self.line_layouts.clear();
@@ -124,7 +189,7 @@ impl Buffer {
     }
     pub fn insert_line(&mut self, loc: usize) {
         self.lines.insert(loc+1, String::from(""));
-        self.line_layouts.insert(loc, None);
+        self.line_layouts.insert(loc+1, None);
         self.cursor_col = 0; self.move_cursor((0,1));
     }
 
