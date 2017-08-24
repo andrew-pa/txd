@@ -35,6 +35,7 @@ impl Action {
                     'o' => Some(Action::InsertLine),
                     ';' => Some(Action::Command),
                     ':' => Some(Action::Command),
+                    'x' => Some(Action::Delete(Movement::Char(true))),
                     'd' => Movement::parse(s.split_at(i+1).1, false).map(Action::Delete),
                     'c' => Movement::parse(s.split_at(i+1).1, false).map(Action::Change),
                     'r' => cs.next().map(|(_,c)| Action::Replace(c)),
@@ -53,7 +54,7 @@ impl NormalMode {
 }
 
 impl Mode for NormalMode {
-    fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Option<Box<Mode>> {
+    fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Result<Option<Box<Mode>>, Box<Error>> {
         match e {
             Event::Key(k, d) => {
                 match k {
@@ -65,24 +66,28 @@ impl Mode for NormalMode {
                     self.buf.clear();
                     match a {
                         Action::Move(mv) => {
-                            app.mutate_buf(|b| b.make_movement(mv)); None
+                            app.mutate_buf(|b| b.make_movement(mv)); Ok(None)
                         },
-                        Action::Delete(mv) => { app.mutate_buf(|b| b.delete_movement(mv)); None },
-                        Action::Insert => Some(Box::new(InsertMode::new())),
-                        Action::Command => Some(Box::new(CommandMode::new(app))),
+                        Action::Delete(mv) => { app.mutate_buf(|b| b.delete_movement(mv)); Ok(None) },
+                        Action::Change(mv) => {
+                            app.mutate_buf(|b| b.delete_movement(mv)); 
+                            Ok(Some(Box::new(InsertMode::new())))
+                        },
+                        Action::Insert => Ok(Some(Box::new(InsertMode::new()))),
+                        Action::Command => Ok(Some(Box::new(CommandMode::new(app)))),
                         Action::Append => {
                             app.mutate_buf(|b| b.move_cursor((1,0)));
-                            Some(Box::new(InsertMode::new()))
+                            Ok(Some(Box::new(InsertMode::new())))
                         },
                         Action::InsertLine => {
                             app.mutate_buf(|b| { let loc = b.cursor_line; b.insert_line(loc) });
-                            Some(Box::new(InsertMode::new()))
+                            Ok(Some(Box::new(InsertMode::new())))
                         }
-                        _ => { None }
+                        _ => { Ok(None) }
                     }
-                } else { None }
+                } else { Ok(None) }
             },
-            _ => { None }
+            _ => { Ok(None) }
         }
     }
     fn status_tag(&self) -> &str { "NORMAL" }

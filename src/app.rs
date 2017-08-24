@@ -26,6 +26,7 @@ impl State {
 
 pub struct TxdApp {
     state: State,
+    last_err: Option<Box<Error>>,
     mode: Box<mode::Mode>
 }
 
@@ -35,16 +36,21 @@ impl TxdApp {
         let buf = Rc::new(RefCell::new(Buffer::load(Path::new("src\\main.rs"), res.clone()).expect("open file")));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
-        TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, res }, mode: Box::new(mode::NormalMode::new()) }
+        TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, res }, mode: Box::new(mode::NormalMode::new()), last_err: None }
     }
 }
 
 impl App for TxdApp {
     fn event(&mut self, e: Event, win: WindowRef) {
+        match e {
+            Event::MouseMove(_,_) => {}
+            _ => if self.last_err.is_some() { self.last_err = None; }
+        }
         let nxm = self.mode.event(e, &mut self.state, win);
         match nxm {
-            Some(new_mode) => { self.mode = new_mode }
-            None => {}
+            Ok(Some(new_mode)) => { self.mode = new_mode }
+            Ok(None) => {}
+            Err(err) => { self.last_err = Some(err); /*self.mode = Box::new(mode::NormalMode::new())*/ }
         }
     }
 
@@ -65,10 +71,15 @@ impl App for TxdApp {
         rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0),
                      &format!("ln {} col {}", buf.cursor_line, buf.cursor_col),
                      Color::rgb(0.0, 0.6, 0.4), &res.font);
+        if let Some(ref err) = self.last_err {
+            rx.draw_text(Rect::xywh(4.0, bnd.h-18.0, bnd.w, 18.0),
+                &format!("error: {}", err),
+                Color::rgb(0.9, 0.2, 0.0), &res.font);
+        }
         //draw command line
         if let Some(cmd) = self.mode.pending_command() {
             rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-18.0, bnd.w, 18.0), cmd,
-                            Color::rgb(0.8, 0.8, 0.8), &res.font);
+            Color::rgb(0.8, 0.8, 0.8), &res.font);
         }
         self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, bnd.h-18.0, bnd.w-200.0, 20.0));
     }
