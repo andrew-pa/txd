@@ -21,7 +21,7 @@ impl Mode for InsertMode {
         let mut buf = buf_.borrow_mut();
         let cloc = buf.curr_loc();
         match e {
-            Event::Key(k,false) => {
+            Event::Key(k,true) => {
                 match k {
                     KeyCode::Enter => {
                         buf.break_line(cloc);

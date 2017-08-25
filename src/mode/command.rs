@@ -61,7 +61,7 @@ impl CommandMode {
             Some('b') => {
                 let (b, num) = cmd.split_at(1);
                 let ix = num.trim().parse::<usize>()?;
-                if ix < 1 || ix > app.bufs.len() {
+                if ix < 1 || ix >= app.bufs.len() {
                     Err(Box::new(CommandError::InvalidCommand(Some("Invalid buffer index"))))
                 } else {
                     app.current_buffer = ix;
@@ -76,7 +76,7 @@ impl CommandMode {
 impl Mode for CommandMode {
     fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Result<Option<Box<Mode>>, Box<Error>> {
         match e {
-            Event::Key(k, false) => match k {
+            Event::Key(k, true) => match k {
                 KeyCode::Enter => {
                     let r = self.execute(app, win);
                     let mut buf_ = &app.bufs[0];

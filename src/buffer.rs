@@ -58,10 +58,14 @@ impl Buffer {
         let mut cursor_line = self.cursor_line as isize + dy;
         if cursor_col < 0 { cursor_col = 0; }
         if cursor_line < 0 { cursor_line = 0; }
+
         let bl = &self.lines;
         if cursor_line >= bl.len() as isize { cursor_line = (bl.len()-1) as isize; }
-        let cln = bl[cursor_line as usize].len();
-        if cursor_col as usize > cln { cursor_col = cln as isize; }
+
+        let cln = &bl[cursor_line as usize];
+        if cursor_col as usize > cln.len() { cursor_col = cln.len() as isize; }
+        while !cln.is_char_boundary(cursor_col as usize) { println!("{}", cursor_col); cursor_col += dx.signum(); }
+
 
         if cursor_line < self.viewport_start as isize {
             self.viewport_start = self.viewport_start.saturating_sub(3);
@@ -106,7 +110,7 @@ impl Buffer {
                 let (left, right) = self.lines[self.cursor_line].split_at((self.cursor_col as isize + if forwards {1} else {-1}) as usize);
                 //println!("({}, {})", left, right);
                 match if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize + 1)) } {
-                    Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0} + 1, 0),
+                    Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0}, 0),
                     None => (0,0)
                 }
             },
@@ -134,22 +138,24 @@ impl Buffer {
             Movement::WholeLine => {
                 self.lines.remove(self.cursor_line);
                 self.line_layouts.remove(self.cursor_line);
-                return;
             },
             Movement::Rep(count, box Movement::WholeLine) => {
                 self.lines.drain(self.cursor_line..(self.cursor_line+count));
                 self.line_layouts.drain(self.cursor_line..(self.cursor_line+count));
-                return;
-            }, _ => {}
+            },
+            _ => {
+                let offset = self.movement_cursor_offset(mv);
+                if offset.1 == 0 { //deleting within the current line
+                    let last = (offset.0 + self.cursor_col as isize) as usize;
+                    println!("deleting: {}, {}", self.cursor_col, last);
+                    self.lines[self.cursor_line].drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last });
+                    self.line_layouts[self.cursor_line] = None;
+                } else {
+                    panic!("r i p");
+                }
+            }
         }
-        let offset = self.movement_cursor_offset(mv);
-        if offset.1 == 0 { //deleting within the current line
-            let last = (offset.0 + self.cursor_col as isize) as usize;
-            println!("deleting: {}, {}", self.cursor_col, last);
-            self.lines[self.cursor_line].drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last });
-            self.line_layouts[self.cursor_line] = None;
-        } else {
-        }
+        self.move_cursor((0,0)); //ensure that the cursor is in a valid position
     }
 
     pub fn clear(&mut self) {

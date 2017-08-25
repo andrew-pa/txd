@@ -73,6 +73,12 @@ impl Mode for NormalMode {
                             app.mutate_buf(|b| b.delete_movement(mv)); 
                             Ok(Some(Box::new(InsertMode::new())))
                         },
+                        Action::Replace(c) => app.mutate_buf(|b| {
+                            let loc = b.curr_loc();
+                            b.delete_char(loc);
+                            b.insert_char(loc,c);
+                            Ok(None)
+                        }),
                         Action::Insert => Ok(Some(Box::new(InsertMode::new()))),
                         Action::Command => Ok(Some(Box::new(CommandMode::new(app)))),
                         Action::Append => {
