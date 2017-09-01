@@ -38,6 +38,12 @@ impl Mode for InsertMode {
                         }
                         Ok(None)
                     }
+                    KeyCode::Tab => {
+                        // 4 space tabs; very preliminary, as there is no configuration system
+                        for _ in 0..3 { buf.insert_char(cloc, ' '); }
+                        buf.move_cursor((4, 0));
+                        Ok(None)
+                    }
                     KeyCode::Character(c) => {
                         if c.is_control() { Ok(None) } else {
                             buf.insert_char(cloc, c);

@@ -2,10 +2,11 @@ use runic::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
+use std::path::Path;
+use std::env;
 
 use buffer::Buffer;
 use res::Resources;
-use std::path::Path;
 use mode;
 
 pub struct State {
@@ -33,7 +34,9 @@ pub struct TxdApp {
 impl TxdApp {
     pub fn init(mut rx: &mut RenderContext) -> TxdApp {
         let res = Rc::new(RefCell::new(Resources::new(rx).expect("create resources")));
-        let buf = Rc::new(RefCell::new(Buffer::load(Path::new("src\\main.rs"), res.clone()).expect("open file")));
+        let buf = Rc::new(RefCell::new(
+                env::args().nth(1).map_or_else(|| Buffer::new(res.clone()),
+                                                |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
         TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, res }, mode: Box::new(mode::NormalMode::new()), last_err: None }
@@ -42,15 +45,11 @@ impl TxdApp {
 
 impl App for TxdApp {
     fn event(&mut self, e: Event, win: WindowRef) {
-        match e {
-            Event::MouseMove(_,_) => {}
-            _ => if self.last_err.is_some() { self.last_err = None; }
-        }
         let nxm = self.mode.event(e, &mut self.state, win);
         match nxm {
-            Ok(Some(new_mode)) => { self.mode = new_mode }
+            Ok(Some(new_mode)) => { if self.last_err.is_some() { self.last_err = None; } self.mode = new_mode }
             Ok(None) => {}
-            Err(err) => { println!("error: {}", err); self.last_err = Some(err); /*self.mode = Box::new(mode::NormalMode::new())*/ }
+            Err(err) => { println!("error: {}", err); self.last_err = Some(err); self.mode = Box::new(mode::NormalMode::new()); }
         }
     }
 
