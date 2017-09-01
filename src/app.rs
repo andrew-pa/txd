@@ -50,7 +50,7 @@ impl App for TxdApp {
         match nxm {
             Ok(Some(new_mode)) => { self.mode = new_mode }
             Ok(None) => {}
-            Err(err) => { self.last_err = Some(err); /*self.mode = Box::new(mode::NormalMode::new())*/ }
+            Err(err) => { println!("error: {}", err); self.last_err = Some(err); /*self.mode = Box::new(mode::NormalMode::new())*/ }
         }
     }
 

@@ -25,7 +25,7 @@ enum Action {
 
 impl Action {
     fn parse(s: &str) -> Option<Action> {
-        let mut cs = s.char_indices();
+        let mut cs = s.trim().char_indices();
         match cs.next() {
             Some((i, c)) => {
                 //println!("i,c {} {}", i, c);
@@ -58,7 +58,7 @@ impl Mode for NormalMode {
         match e {
             Event::Key(k, d) => {
                 match k {
-                    KeyCode::Character(c) => { self.buf.push(c); }
+                    KeyCode::Character(c) => { if !c.is_control() { self.buf.push(c); } }
                     KeyCode::Escape => { self.buf.clear(); }
                     _ => { }
                 }

@@ -16,6 +16,7 @@
 		- Move Action parse/commit code into Buffer from Normal mode to support Undo
 	- Mouse support
 	- Make buffer rep more reasonable
+		- Add modified flag + render it
 	- Configuration stuff (colors! fonts! commands?)
 		- High priority because many things are blocked due to the fact that they require configuration and it's unknown how that will work
 	- Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers
