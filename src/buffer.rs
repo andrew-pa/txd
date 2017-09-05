@@ -3,10 +3,17 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::fs::*;
 use std::io::{Read, Write, Error as IoError, ErrorKind};
+use std::cmp::min;
 
 use runic::{App, Window as SystemWindow, Event, RenderContext, Color, Point, Rect, Font, TextLayout, KeyCode};
 use res::Resources;
 use movement::Movement;
+
+#[derive(Debug)]
+pub enum TabStyle {
+    Tab,
+    Spaces(usize)
+}
 
 pub struct Buffer {
     pub fs_loc: Option<PathBuf>,
@@ -19,7 +26,9 @@ pub struct Buffer {
     viewport_end: usize,
     pub cursor_line: usize,
     pub cursor_col: usize,
-    pub show_cursor: bool
+    pub show_cursor: bool,
+
+    pub tab_style: TabStyle,
 }
 
 impl Buffer {
@@ -27,28 +36,43 @@ impl Buffer {
         Buffer {
             fs_loc: None, lines: vec![String::from("")],
             res, cursor_line: 0, cursor_col: 0, viewport_start: 0, viewport_end: 0,
-            line_layouts: vec![None], show_cursor: true
+            line_layouts: vec![None], show_cursor: true, tab_style: /* should be config */ TabStyle::Tab
         }
     }
 
     pub fn load(fp: &Path, res: Rc<RefCell<Resources>>) -> Result<Buffer, IoError> {
         let fp_exists = fp.exists();
-        let (lns, lay) = if fp_exists { 
+        let (lns, lay, ts) = if fp_exists { 
             let mut f = OpenOptions::new().read(true).write(true).open(fp)?;
             let mut s : String = String::new();
             f.read_to_string(&mut s)?;
             let lns: Vec<String> = s.lines().map(String::from).collect();
             let mut layouts = Vec::new();
-            for _ in 0..lns.len() { //replace with Vec::resize_default?
+            let mut ts: Option<TabStyle> = None;
+            for i in 0..lns.len() { //replace with Vec::resize_default?
+                if ts.is_none() {
+                    let mut ch = lns[i].chars();
+                    ts = match ch.next() {
+                        Some('\t') => Some(TabStyle::Tab),
+                        Some(' ') => {
+                            let mut n = 1;
+                            while let Some(' ') = ch.next() { n += 1 }
+                            Some(TabStyle::Spaces(n))
+                        },
+                        _ => None
+                    };
+                }
                 layouts.push(None);
             }
-            (lns, layouts)
+            //println!("detected tab style = {:?}", ts);
+            (lns, layouts, ts.unwrap_or(TabStyle::Tab /* config details */))
         } else {
-            (vec![String::from("")], vec![None])
+            (vec![String::from("")], vec![None], /* should be config just like ::new */ TabStyle::Tab)
         };
         let mut buf = Buffer {
             fs_loc: Some(PathBuf::from(fp)),
-            lines: lns, line_layouts: lay, viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true, res
+            lines: lns, line_layouts: lay, viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true, res,
+            tab_style: ts
         };
         Ok(buf)
     }
@@ -60,7 +84,7 @@ impl Buffer {
         if cursor_line < 0 { cursor_line = 0; }
 
         let bl = &self.lines;
-        if cursor_line >= bl.len() as isize { cursor_line = (bl.len()-1) as isize; }
+        if cursor_line >= (bl.len() as isize) { cursor_line = (bl.len()-1) as isize; }
 
         let cln = &bl[cursor_line as usize];
         if cursor_col as usize > cln.len() { cursor_col = cln.len() as isize; }
@@ -146,7 +170,7 @@ impl Buffer {
             _ => {
                 let offset = self.movement_cursor_offset(mv);
                 if offset.1 == 0 { //deleting within the current line
-                    let last = (offset.0 + self.cursor_col as isize) as usize;
+                    let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
                     println!("deleting: {}, {}", self.cursor_col, last);
                     self.lines[self.cursor_line].drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last });
                     self.line_layouts[self.cursor_line] = None;
@@ -198,6 +222,18 @@ impl Buffer {
         self.line_layouts.insert(loc+1, None);
         self.cursor_col = 0; self.move_cursor((0,1));
     }
+    pub fn insert_tab(&mut self, loc: (usize, usize)) {
+        match self.tab_style {
+            TabStyle::Spaces(num) => {
+                for _ in 0..num { self.insert_char(loc, ' '); }
+                self.move_cursor((num as isize, 0));
+            },
+            TabStyle::Tab => {
+                self.insert_char(loc, '\t');
+                self.move_cursor((1, 0)); //sketchy cursor moves one tab at a time ⇒ can't break tabs in the middle. Why would anyone do that anyways...
+            }
+        }
+    }
 
     pub fn sync_disk(&mut self) -> Result<(), IoError> {
         let lines = self.lines.iter();
@@ -223,31 +259,32 @@ impl Buffer {
             match self.line_layouts[line] {
                 Some(ref l) => { 
                     rx.draw_text_layout(p, &l, Color::rgb(0.9, 0.9, 0.9));
+
+                    //draw cursor
+                    if self.show_cursor && line == self.cursor_line {
+                        let col = self.cursor_col;
+                        let mut cb = self.line_layouts[self.cursor_line].as_ref().map_or(Rect::xywh(0.0, 0.0, 8.0, 8.0), |v| v.char_bounds(col));
+                        if cb.w == 0.0 { cb.w = 8.0; }
+                        rx.fill_rect(cb.offset(p),
+                        Color::rgba(0.8, 0.6, 0.0, 0.9));
+                    }
+
                     let b = l.bounds();
                     p.y += b.h;
                 }
                 None => {
                     replace = true; // a hacky way to get around the fact that the match borrows self.line_layouts,
-                                    // so we can't assign to it until we escape the scope
+                    // so we can't assign to it until we escape the scope
                 }
             }
             if replace {
                 self.line_layouts[line] = TextLayout::new(&mut rx, &self.lines[line], &self.res.borrow().font,
-                                                                  bnd.w, bnd.h).ok();
+                bnd.w, bnd.h).ok();
             } else {
                 line += 1;
             }
         }
         self.viewport_end = line;
-
-        //draw cursor
-        if self.show_cursor {
-            let col = self.cursor_col;
-            let mut cb = self.line_layouts[self.cursor_line].as_ref().map_or(Rect::xywh(0.0, 0.0, 8.0, 8.0), |v| v.char_bounds(col));
-            if cb.w == 0.0 { cb.w = 8.0; }
-            rx.fill_rect(cb.offset(Point::xy(bnd.x,bnd.y+cb.h*(self.cursor_line.saturating_sub(self.viewport_start)) as f32)),
-            Color::rgba(0.8, 0.6, 0.0, 0.9));
-        }
     }
 
 }

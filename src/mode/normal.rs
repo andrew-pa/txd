@@ -14,13 +14,21 @@ pub struct NormalMode {
 // i: insert text
 // c[mov]: change text
 // r[char]: replace char
+// [reg]y[mov]: yank (copy) text into reg
+// [reg]p: put text out of reg
+// reg: '"' followed with a register name (one char)
+//    special registers:
+//        "* => the system clipboard
+//        "! => the register that gets the last yanked/deleted movement by default
 #[derive(Debug)]
 enum Action {
     Move(Movement),
     Delete(Movement),
     Change(Movement),
     Insert, InsertLine, Append, Command,
-    Replace(char)
+    Replace(char),
+    Yank(char, Movement),
+    Put(char)
 }
 
 impl Action {
