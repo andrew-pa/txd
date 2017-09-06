@@ -1,4 +1,5 @@
 #![feature(box_patterns)]
+#![feature(str_escape)]
 extern crate runic;
 // txd: a text editor🖳
 

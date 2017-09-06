@@ -26,6 +26,7 @@
 	- open previous buffer (:b#)
 	- Make buffer rep more reasonable
 		- Add modified flag + render it
+		- Huuuuuge files
 	- Search (with regex) might be good; '/' command
 	- :s ed command?
 	- indentation commands (=, <<, >>)
@@ -34,6 +35,7 @@
 	- [done sorta] fix split long lines so they do normal, regular things
 	- multipule windows; even just horiz layouts
 	- VISUAL mode/selection
+	- folds
 
 - Language Server Protocol
 	- low-level client

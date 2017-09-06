@@ -15,6 +15,13 @@ pub enum TabStyle {
     Spaces(usize)
 }
 
+
+#[derive(Debug)]
+pub enum Yank {
+    Span(String), // a span of characters that are intra-line
+    Lines(Vec<String>) // one or more lines of text
+}
+
 pub struct Buffer {
     pub fs_loc: Option<PathBuf>,
     pub lines: Vec<String>,
@@ -114,7 +121,7 @@ impl Buffer {
         (if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize)) })
     }
 
-    pub fn movement_cursor_offset(&mut self, mv: Movement) -> (isize, isize) {
+    pub fn movement_cursor_offset(&self, mv: Movement) -> (isize, isize) {
         //println!("movement = {:?}", mv);
         match mv {
             Movement::Char(right) => (if right {1} else {-1}, 0),
@@ -157,14 +164,15 @@ impl Buffer {
         self.move_cursor(offset)
     }
 
-    pub fn delete_movement(&mut self, mv: Movement) {
+    pub fn delete_movement(&mut self, mv: Movement) -> String {
+        let mut removed: Option<String> = None;
         match mv {
             Movement::WholeLine => {
-                self.lines.remove(self.cursor_line);
+                removed = Some(self.lines.remove(self.cursor_line) + "\n");
                 self.line_layouts.remove(self.cursor_line);
             },
             Movement::Rep(count, box Movement::WholeLine) => {
-                self.lines.drain(self.cursor_line..(self.cursor_line+count));
+                removed = Some(self.lines.drain(self.cursor_line..(self.cursor_line+count)).fold(String::from(""), |s,l| s+&l+"\n" ));
                 self.line_layouts.drain(self.cursor_line..(self.cursor_line+count));
             },
             _ => {
@@ -172,14 +180,41 @@ impl Buffer {
                 if offset.1 == 0 { //deleting within the current line
                     let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
                     println!("deleting: {}, {}", self.cursor_col, last);
-                    self.lines[self.cursor_line].drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last });
+                    removed = Some(self.lines[self.cursor_line]
+                                   .drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last })
+                                   .collect::<String>());
                     self.line_layouts[self.cursor_line] = None;
                 } else {
-                    panic!("r i p");
+                    panic!("tried to delete multiline range");
                 }
             }
         }
         self.move_cursor((0,0)); //ensure that the cursor is in a valid position
+        removed.unwrap()
+    }
+
+    pub fn yank_movement(&self, mv: Movement) -> String {
+        match mv {
+            Movement::WholeLine => {
+                self.lines[self.cursor_line].clone() + "\n"
+            },
+            Movement::Rep(count, box Movement::WholeLine) => {
+                self.lines.iter().skip(self.cursor_line).take(count)
+                    .fold(String::from(""), |s,l| s+&l+"\n")
+            },
+            _ => {
+                let offset = self.movement_cursor_offset(mv);
+                if offset.1 == 0 { //deleting within the current line
+                    let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
+                    println!("yanking: {}, {}", self.cursor_col, last);
+                    let mut s = String::new();
+                    s.push_str(&self.lines[self.cursor_line][if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last }]);
+                    s
+                } else {
+                    panic!("tried to yank multiline range");
+                }
+            }
+        }
     }
 
     pub fn clear(&mut self) {
@@ -193,11 +228,14 @@ impl Buffer {
         self.line_layouts[line] = None;
     }
 
-    pub fn insert_char(&mut self, loc: (usize,usize), c: char) {
+    pub fn insert_char(&mut self, c: char) {
+        let loc = self.curr_loc();
         self.lines[loc.1].insert(loc.0, c);
         self.invalidate_line(loc.1);
+        self.move_cursor((1, 0));
     }
-    pub fn delete_char(&mut self, loc: (usize, usize)) {
+    pub fn delete_char(&mut self) {
+        let loc = self.curr_loc();
         if loc.0 >= self.lines[loc.1].len() {
             self.lines[loc.1].pop();
         }
@@ -206,7 +244,8 @@ impl Buffer {
         }
         self.invalidate_line(loc.1);
     }
-    pub fn break_line(&mut self, loc: (usize, usize)) {
+    pub fn break_line(&mut self) {
+        let loc = self.curr_loc();
         let new_line = if loc.0 >= self.lines[loc.1].len() {
             String::from("")
         } else {
@@ -217,20 +256,39 @@ impl Buffer {
         self.line_layouts.insert(loc.1, None);
         self.cursor_col = 0; self.move_cursor((0,1));
     }
-    pub fn insert_line(&mut self, loc: usize) {
-        self.lines.insert(loc+1, String::from(""));
+    pub fn insert_line(&mut self, val: Option<&str>) {
+        let loc = self.cursor_line;
+        self.lines.insert(loc+1, val.map(|s| String::from(s)).unwrap_or_default());
         self.line_layouts.insert(loc+1, None);
         self.cursor_col = 0; self.move_cursor((0,1));
     }
-    pub fn insert_tab(&mut self, loc: (usize, usize)) {
+    pub fn insert_tab(&mut self) {
         match self.tab_style {
             TabStyle::Spaces(num) => {
-                for _ in 0..num { self.insert_char(loc, ' '); }
-                self.move_cursor((num as isize, 0));
+                for _ in 0..num { self.insert_char(' '); }
             },
             TabStyle::Tab => {
-                self.insert_char(loc, '\t');
-                self.move_cursor((1, 0)); //sketchy cursor moves one tab at a time ⇒ can't break tabs in the middle. Why would anyone do that anyways...
+                self.insert_char('\t');
+                //sketchy cursor moves one tab at a time ⇒ can't break tabs in the middle. Why would anyone do that anyways...
+            }
+        }
+    }
+    pub fn insert_string(&mut self, s: &String) {
+        // if the string has '\n' at the end → then insert it on it's own new line
+        // else → start inserting in the middle of the current line
+        if s.as_bytes()[s.len()-1] == b'\n' {
+            for ln in s.lines() {
+                self.insert_line(Some(ln));
+            }
+        } else {
+            let mut lns = s.lines();
+            let fln = lns.next().unwrap();
+            let loc = self.curr_loc();
+            self.lines[loc.1].insert_str(loc.0, fln);
+            self.invalidate_line(loc.1);
+            self.move_cursor((fln.len() as isize, 0));
+            for ln in lns {
+                self.insert_line(Some(ln));
             }
         }
     }

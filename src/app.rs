@@ -4,15 +4,20 @@ use std::cell::RefCell;
 use std::error::Error;
 use std::path::Path;
 use std::env;
+use std::collections::HashMap;
 
 use buffer::Buffer;
 use res::Resources;
 use mode;
 
+#[derive(Debug,PartialEq,Eq,Hash)]
+pub struct RegisterId(pub char);
+
 pub struct State {
     pub bufs: Vec<Rc<RefCell<Buffer>>>,
     pub res: Rc<RefCell<Resources>>,
     pub current_buffer: usize,
+    pub registers: HashMap<RegisterId, String>
 }
 
 impl State {
@@ -39,7 +44,7 @@ impl TxdApp {
                                                 |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
-        TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, res }, mode: Box::new(mode::NormalMode::new()), last_err: None }
+        TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, registers: HashMap::new(), res }, mode: Box::new(mode::NormalMode::new()), last_err: None }
     }
 }
 

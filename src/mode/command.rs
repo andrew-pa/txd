@@ -68,6 +68,13 @@ impl CommandMode {
                     Ok(Some(Box::new(NormalMode::new())))
                 }
             },
+            Some('"') => {
+                println!("-- registers --");
+                for (r, v) in app.registers.iter() {
+                    println!("\"{} = {}", r.0, v.escape_default());
+                }
+                Ok(Some(Box::new(NormalMode::new())))
+            },
             _ => Err(Box::new(CommandError::UnknownCommand))
         }
     }

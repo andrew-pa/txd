@@ -24,28 +24,27 @@ impl Mode for InsertMode {
             Event::Key(k,true) => {
                 match k {
                     KeyCode::Enter => {
-                        buf.break_line(cloc);
+                        buf.break_line();
                         Ok(None)
                     }
                     KeyCode::Delete => {
-                        buf.delete_char(cloc);
+                        buf.delete_char();
                         Ok(None)
                     }
                     KeyCode::Backspace => {
                         if cloc.0 != 0 {
+                            buf.delete_char();
                             buf.move_cursor((-1, 0));
-                            buf.delete_char((cloc.0-1, cloc.1));
                         }
                         Ok(None)
                     }
                     KeyCode::Tab => {
-                        buf.insert_tab(cloc);
+                        buf.insert_tab();
                         Ok(None)
                     }
                     KeyCode::Character(c) => {
                         if c.is_control() { Ok(None) } else {
-                            buf.insert_char(cloc, c);
-                            buf.move_cursor((1, 0));
+                            buf.insert_char(c);
                             Ok(None)
                         }
                     }
