@@ -19,7 +19,8 @@ pub struct State {
     pub bufs: Vec<Rc<RefCell<Buffer>>>,
     pub res: Rc<RefCell<Resources>>,
     pub current_buffer: usize,
-    pub registers: HashMap<RegisterId, String>
+    pub registers: HashMap<RegisterId, String>,
+    pub should_quit: bool
 }
 
 impl State {
@@ -46,7 +47,13 @@ impl TxdApp {
                                                 |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
-        TxdApp { state: State { bufs: vec![cmd, buf], current_buffer: 1, registers: HashMap::new(), res }, mode: Box::new(mode::NormalMode::new()), last_err: None }
+        TxdApp { state: State {
+                bufs: vec![cmd, buf],
+                current_buffer: 1,
+                registers: HashMap::new(), res,
+                should_quit: false
+            }, mode: Box::new(mode::NormalMode::new()), last_err: None
+        }
     }
 }
 
@@ -63,7 +70,7 @@ impl App for TxdApp {
             },
             _ => { }
         }
-        false
+        self.state.should_quit
     }
 
     fn paint(&mut self, mut rx: &mut RenderContext) {

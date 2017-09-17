@@ -28,7 +28,7 @@ impl Mode for InsertMode {
                     Ok(None)
                 }
             },
-            WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(k), .. }, .. } => {
+            WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(k), state: ElementState::Pressed, .. }, .. } => {
                 match k {
                     VirtualKeyCode::Return => {
                         buf.break_line();

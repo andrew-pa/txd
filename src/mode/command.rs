@@ -47,7 +47,7 @@ impl CommandMode {
             app.bufs[0].borrow().lines.last().unwrap().clone()
         };
         match cmd.chars().next() {
-            Some('q') => { Ok(Some(Box::new(NormalMode::new()))) },
+            Some('q') => { app.should_quit = true; Ok(Some(Box::new(NormalMode::new()))) },
             Some('w') => {
                 app.mutate_buf(|b| b.sync_disk())?;
                 Ok(Some(Box::new(NormalMode::new())))
