@@ -1,6 +1,6 @@
 
 use super::*;
-use runic::{Event,KeyCode,WindowRef};
+use winit::*;
 use movement::Movement;
 
 pub struct InsertMode {
@@ -13,46 +13,47 @@ impl InsertMode {
 }
 
 impl Mode for InsertMode {
-    fn event(&mut self, e: Event, app: &mut app::State, _: WindowRef) -> Result<Option<Box<Mode>>, Box<Error>> {
+    fn event(&mut self, e: WindowEvent, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
         let mut buf_ = match self.target_buffer {
             Some(target) => app.bufs[target].clone(),
             None => app.buf(),
         };
         let mut buf = buf_.borrow_mut();
         let cloc = buf.curr_loc();
+
         match e {
-            Event::Key(k,true) => {
+            WindowEvent::ReceivedCharacter(c) => {
+                if c.is_control() { Ok(None) } else {
+                    buf.insert_char(c);
+                    Ok(None)
+                }
+            },
+            WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(k), .. }, .. } => {
                 match k {
-                    KeyCode::Enter => {
+                    VirtualKeyCode::Return => {
                         buf.break_line();
                         Ok(None)
                     }
-                    KeyCode::Delete => {
+                    VirtualKeyCode::Delete => {
                         buf.delete_char();
                         Ok(None)
                     }
-                    KeyCode::Backspace => {
+                    VirtualKeyCode::Back => {
                         if cloc.0 != 0 {
                             buf.delete_char();
                             buf.move_cursor((-1, 0));
                         }
                         Ok(None)
                     }
-                    KeyCode::Tab => {
+                    VirtualKeyCode::Tab => {
                         buf.insert_tab();
                         Ok(None)
                     }
-                    KeyCode::Character(c) => {
-                        if c.is_control() { Ok(None) } else {
-                            buf.insert_char(c);
-                            Ok(None)
-                        }
-                    }
-                    KeyCode::Up => { buf.make_movement(Movement::Line(true)); Ok(None) }
-                    KeyCode::Down => { buf.make_movement(Movement::Line(false)); Ok(None) }
-                    KeyCode::Left => { buf.make_movement(Movement::Char(false)); Ok(None) }
-                    KeyCode::Right => { buf.make_movement(Movement::Char(true)); Ok(None) }
-                    KeyCode::Escape => { Ok(Some(Box::new(NormalMode::new()))) }
+                    VirtualKeyCode::Up => { buf.make_movement(Movement::Line(true)); Ok(None) }
+                    VirtualKeyCode::Down => { buf.make_movement(Movement::Line(false)); Ok(None) }
+                    VirtualKeyCode::Left => { buf.make_movement(Movement::Char(false)); Ok(None) }
+                    VirtualKeyCode::Right => { buf.make_movement(Movement::Char(true)); Ok(None) }
+                    VirtualKeyCode::Escape => { Ok(Some(Box::new(NormalMode::new()))) }
                     _ => Ok(None)
                 }
             }

@@ -1,6 +1,6 @@
 
 use super::*;
-use runic::{Event, KeyCode, WindowRef};
+use winit::{WindowEvent};
 use movement::Movement;
 use app::RegisterId;
 
@@ -66,6 +66,54 @@ impl Action {
             None => None
         }
     }
+
+    fn execute(&self, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
+        match self {
+            &Action::Move(ref mv) => {
+                app.mutate_buf(|b| b.make_movement(mv.clone())); Ok(None)
+            },
+            &Action::Delete(ref mv, ref r) => {
+                let v = app.mutate_buf(|b| b.delete_movement(mv.clone()));
+                app.registers.insert(r.clone(), v);
+                Ok(None)
+            },
+            &Action::Change(ref mv, ref r) => {
+                let v = app.mutate_buf(|b| b.delete_movement(mv.clone())); 
+                app.registers.insert(r.clone(), v);
+                Ok(Some(Box::new(InsertMode::new())))
+            },
+            &Action::Replace(c) => app.mutate_buf(|b| {
+                b.delete_char();
+                b.insert_char(c);
+                Ok(None)
+            }),
+            &Action::Insert => Ok(Some(Box::new(InsertMode::new()))),
+            &Action::Command => Ok(Some(Box::new(CommandMode::new(app)))),
+            &Action::Append => {
+                app.mutate_buf(|b| b.move_cursor((1,0)));
+                Ok(Some(Box::new(InsertMode::new())))
+            },
+            &Action::InsertLine => {
+                app.mutate_buf(|b| { b.insert_line(None) });
+                Ok(Some(Box::new(InsertMode::new())))
+            },
+            &Action::Yank(ref mv, ref r) => {
+                let v = { app.bufs[app.current_buffer].borrow().yank_movement(mv.clone()) };
+                app.registers.insert(r.clone(), v);
+                Ok(None)
+            },
+            &Action::Put(ref r) => {
+                let pv = app.registers.get(r);
+                if pv.is_some() {
+                    let mut _b = &mut app.bufs[app.current_buffer];
+                    let mut b = _b.borrow_mut();
+                    b.insert_string(pv.unwrap());
+                }
+                Ok(None)
+            },
+            _ => { Ok(None) }
+        }
+    }
 }
 
 impl NormalMode {
@@ -75,59 +123,18 @@ impl NormalMode {
 }
 
 impl Mode for NormalMode {
-    fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Result<Option<Box<Mode>>, Box<Error>> {
+    fn event(&mut self, e: WindowEvent, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
         match e {
-            Event::Key(k, d) => {
-                match k {
-                    KeyCode::Character(c) => { if !c.is_control() { self.buf.push(c); } }
-                    KeyCode::Escape => { self.buf.clear(); }
-                    _ => { }
-                }
+            WindowEvent::ReceivedCharacter(c) => {
+                if !c.is_control() { self.buf.push(c); } 
                 if let Some(a) = Action::parse(&self.buf) {
                     self.buf.clear();
-                    match a {
-                        Action::Move(mv) => {
-                            app.mutate_buf(|b| b.make_movement(mv)); Ok(None)
-                        },
-                        Action::Delete(mv, r) => { let v = app.mutate_buf(|b| b.delete_movement(mv)); app.registers.insert(r, v); Ok(None) },
-                        Action::Change(mv, r) => {
-                            let v = app.mutate_buf(|b| b.delete_movement(mv)); 
-                            app.registers.insert(r, v);
-                            Ok(Some(Box::new(InsertMode::new())))
-                        },
-                        Action::Replace(c) => app.mutate_buf(|b| {
-                            b.delete_char();
-                            b.insert_char(c);
-                            Ok(None)
-                        }),
-                        Action::Insert => Ok(Some(Box::new(InsertMode::new()))),
-                        Action::Command => Ok(Some(Box::new(CommandMode::new(app)))),
-                        Action::Append => {
-                            app.mutate_buf(|b| b.move_cursor((1,0)));
-                            Ok(Some(Box::new(InsertMode::new())))
-                        },
-                        Action::InsertLine => {
-                            app.mutate_buf(|b| { b.insert_line(None) });
-                            Ok(Some(Box::new(InsertMode::new())))
-                        },
-                        Action::Yank(mv, r) => {
-                            let v = { app.bufs[app.current_buffer].borrow().yank_movement(mv) };
-                            app.registers.insert(r, v);
-                            Ok(None)
-                        },
-                        Action::Put(r) => {
-                            let pv = app.registers.get(&r);
-                            if pv.is_some() {
-                                let mut _b = &mut app.bufs[app.current_buffer];
-                                let mut b = _b.borrow_mut();
-                                b.insert_string(pv.unwrap());
-                            }
-                            Ok(None)
-                        },
-                        _ => { Ok(None) }
-                    }
+                    a.execute(app)
                 } else { Ok(None) }
-            },
+            }
+            WindowEvent::KeyboardInput { input: winit::KeyboardInput { virtual_keycode: Some(winit::VirtualKeyCode::Escape), .. }, .. } => {
+                self.buf.clear(); Ok(None)
+            }
             _ => { Ok(None) }
         }
     }

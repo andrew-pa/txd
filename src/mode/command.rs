@@ -1,6 +1,6 @@
 
 use super::*;
-use runic::{Event, KeyCode, WindowRef};
+use winit::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use buffer::Buffer;
@@ -42,12 +42,12 @@ impl CommandMode {
         CommandMode { inserter: InsertMode::new_with_target(0) }
     }
 
-    pub fn execute(&self, app: &mut app::State, win: WindowRef) -> Result<Option<Box<Mode>>, Box<Error>> {
+    pub fn execute(&self, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
         let cmd = { 
             app.bufs[0].borrow().lines.last().unwrap().clone()
         };
         match cmd.chars().next() {
-            Some('q') => { win.quit(); Ok(Some(Box::new(NormalMode::new()))) },
+            Some('q') => { Ok(Some(Box::new(NormalMode::new()))) },
             Some('w') => {
                 app.mutate_buf(|b| b.sync_disk())?;
                 Ok(Some(Box::new(NormalMode::new())))
@@ -81,28 +81,29 @@ impl CommandMode {
 }
 
 impl Mode for CommandMode {
-    fn event(&mut self, e: Event, app: &mut app::State, win: WindowRef) -> Result<Option<Box<Mode>>, Box<Error>> {
+    fn event(&mut self, e: WindowEvent, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
         match e {
-            Event::Key(k, true) => match k {
-                KeyCode::Enter => {
-                    let r = self.execute(app, win);
-                    let mut buf_ = &app.bufs[0];
-                    let mut buf = buf_.borrow_mut();
-                    let len = buf.lines.len();
-                    buf.show_cursor = false;
-                    buf.clear();
-                    r
+            WindowEvent::KeyboardInput { input: k, .. } => 
+                match k.virtual_keycode {
+                    Some(VirtualKeyCode::Return) => {
+                        let r = self.execute(app);
+                        let mut buf_ = &app.bufs[0];
+                        let mut buf = buf_.borrow_mut();
+                        let len = buf.lines.len();
+                        buf.show_cursor = false;
+                        buf.clear();
+                        r
+                    }
+                    Some(VirtualKeyCode::Escape) => {
+                        let mut buf_ = &app.bufs[0];
+                        let mut buf = buf_.borrow_mut();
+                        buf.show_cursor = false;
+                        buf.clear();
+                        Ok(Some(Box::new(NormalMode::new())))
+                    }
+                    _ => self.inserter.event(e, app),
                 }
-                KeyCode::Escape => {
-                    let mut buf_ = &app.bufs[0];
-                    let mut buf = buf_.borrow_mut();
-                    buf.show_cursor = false;
-                    buf.clear();
-                    Ok(Some(Box::new(NormalMode::new())))
-                }
-                _ => self.inserter.event(e, app, win),
-            }
-            _ => self.inserter.event(e, app, win),
+            _ => self.inserter.event(e, app),
         }
     }
     fn status_tag(&self) -> &str { "COMMAND" }

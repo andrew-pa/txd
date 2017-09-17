@@ -1,7 +1,8 @@
 [package]
 name = "txd"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Andrew Palmer <andrew.pa@outlook.com>"]
 
 [dependencies]
 runic = { path = "../runic" }
+winit = "0.7"

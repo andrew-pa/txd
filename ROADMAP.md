@@ -15,7 +15,9 @@
 ## things that need to be done ##
 	- Configuration stuff (colors! fonts! commands?)
 		- High priority because many things are blocked due to the fact that they require configuration and it's unknown how that will work
-	- Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers
+	- Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers... or stacks.
+		- Could make it so that there were a number of named stacks. would make the classic copy/paste juggling much better
+		- notably it would reduce the need for so many, but add perhaps a way to index into the stack, also move between them
 	- Undo
 		- Move Action parse/commit code into Buffer from Normal mode to support Undo
 	- Paragraph movements
@@ -23,6 +25,7 @@
 	- Current Directory
 	- Fix viewport wrt insertion
 	- Mouse support
+	- Tab completion on buffer names/file system
 	- open previous buffer (:b#)
 	- Make buffer rep more reasonable
 		- Add modified flag + render it
@@ -31,7 +34,6 @@
 	- :s ed command?
 	- indentation commands (=, <<, >>)
 	- auto-indentation
-	- Tab completion on buffer names/file system
 	- [done sorta] fix split long lines so they do normal, regular things
 	- multipule windows; even just horiz layouts
 	- VISUAL mode/selection

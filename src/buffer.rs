@@ -5,7 +5,7 @@ use std::fs::*;
 use std::io::{Read, Write, Error as IoError, ErrorKind};
 use std::cmp::min;
 
-use runic::{App, Window as SystemWindow, Event, RenderContext, Color, Point, Rect, Font, TextLayout, KeyCode};
+use runic::*;
 use res::Resources;
 use movement::Movement;
 
@@ -312,19 +312,21 @@ impl Buffer {
         //draw text
         let mut p = Point::xy(bnd.x, bnd.y);
         let mut line = self.viewport_start;
+        rx.set_color(Color::rgb(0.9, 0.9, 0.9));
         while p.y < bnd.y+bnd.h && line < self.line_layouts.len() {
             let mut replace = false;
             match self.line_layouts[line] {
                 Some(ref l) => { 
-                    rx.draw_text_layout(p, &l, Color::rgb(0.9, 0.9, 0.9));
+                    rx.draw_text_layout(p, &l);
 
                     //draw cursor
                     if self.show_cursor && line == self.cursor_line {
                         let col = self.cursor_col;
                         let mut cb = self.line_layouts[self.cursor_line].as_ref().map_or(Rect::xywh(0.0, 0.0, 8.0, 8.0), |v| v.char_bounds(col));
                         if cb.w == 0.0 { cb.w = 8.0; }
-                        rx.fill_rect(cb.offset(p),
-                        Color::rgba(0.8, 0.6, 0.0, 0.9));
+                        rx.set_color(Color::rgba(0.8, 0.6, 0.0, 0.9));
+                        rx.fill_rect(cb.offset(p));
+                        rx.set_color(Color::rgb(0.9, 0.9, 0.9));
                     }
 
                     let b = l.bounds();
@@ -336,7 +338,7 @@ impl Buffer {
                 }
             }
             if replace {
-                self.line_layouts[line] = TextLayout::new(&mut rx, &self.lines[line], &self.res.borrow().font,
+                self.line_layouts[line] = rx.new_text_layout(&self.lines[line], &self.res.borrow().font,
                 bnd.w, bnd.h).ok();
             } else {
                 line += 1;

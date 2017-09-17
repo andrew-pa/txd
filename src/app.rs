@@ -10,7 +10,9 @@ use buffer::Buffer;
 use res::Resources;
 use mode;
 
-#[derive(Debug,PartialEq,Eq,Hash)]
+use winit::Event;
+
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub struct RegisterId(pub char);
 
 pub struct State {
@@ -49,13 +51,19 @@ impl TxdApp {
 }
 
 impl App for TxdApp {
-    fn event(&mut self, e: Event, win: WindowRef) {
-        let nxm = self.mode.event(e, &mut self.state, win);
-        match nxm {
-            Ok(Some(new_mode)) => { if self.last_err.is_some() { self.last_err = None; } self.mode = new_mode }
-            Ok(None) => {}
-            Err(err) => { println!("error: {}", err); self.last_err = Some(err); self.mode = Box::new(mode::NormalMode::new()); }
+    fn event(&mut self, e: Event) -> bool {
+        match e {
+            Event::WindowEvent { event: we, .. } => {
+                let nxm = self.mode.event(we, &mut self.state);
+                match nxm {
+                    Ok(Some(new_mode)) => { if self.last_err.is_some() { self.last_err = None; } self.mode = new_mode }
+                    Ok(None) => {}
+                    Err(err) => { println!("error: {}", err); self.last_err = Some(err); self.mode = Box::new(mode::NormalMode::new()); }
+                } 
+            },
+            _ => { }
         }
+        false
     }
 
     fn paint(&mut self, mut rx: &mut RenderContext) {
@@ -67,23 +75,28 @@ impl App for TxdApp {
         buf.paint(rx, Rect::xywh(4.0, 4.0, bnd.w-4.0, bnd.h-34.0));
         
         //draw status line
-        rx.fill_rect(Rect::xywh(0.0, bnd.h-34.0, bnd.w, 18.0), Color::rgb(0.25, 0.22, 0.2));
-        rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(),
-                     Color::rgb(0.4, 0.6, 0.0), &res.font);
+        rx.set_color(Color::rgb(0.25, 0.22, 0.2));
+        rx.fill_rect(Rect::xywh(0.0, bnd.h-34.0, bnd.w, 18.0));
+        rx.set_color(Color::rgb(0.4, 0.6, 0.0));
+        rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), &res.font);
+        rx.set_color(Color::rgb(0.9, 0.4, 0.0));
         rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0), &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
-                     Color::rgb(0.9, 0.4, 0.0), &res.font);
+                     &res.font);
+        rx.set_color(Color::rgb(0.0, 0.6, 0.4));
         rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0),
                      &format!("ln {} col {}", buf.cursor_line, buf.cursor_col),
-                     Color::rgb(0.0, 0.6, 0.4), &res.font);
+                     &res.font);
         if let Some(ref err) = self.last_err {
+            rx.set_color(Color::rgb(0.9, 0.2, 0.0));
             rx.draw_text(Rect::xywh(4.0, bnd.h-18.0, bnd.w, 18.0),
                 &format!("error: {}", err),
-                Color::rgb(0.9, 0.2, 0.0), &res.font);
+                &res.font);
         }
         //draw command line
         if let Some(cmd) = self.mode.pending_command() {
+            rx.set_color(Color::rgb(0.8, 0.8, 0.8));
             rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-18.0, bnd.w, 18.0), cmd,
-            Color::rgb(0.8, 0.8, 0.8), &res.font);
+                        &res.font);
         }
         self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, bnd.h-18.0, bnd.w-200.0, 20.0));
     }
