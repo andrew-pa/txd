@@ -17,6 +17,7 @@
 		- High priority because many things are blocked due to the fact that they require configuration and it's unknown how that will work
 	- Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers... or stacks.
 		- Could make it so that there were a number of named stacks. would make the classic copy/paste juggling much better
+		- [done: stacks, y/p/P, need: C-C, C-V]
 		- notably it would reduce the need for so many, but add perhaps a way to index into the stack, also move between them
 	- Undo
 		- Move Action parse/commit code into Buffer from Normal mode to support Undo
@@ -38,6 +39,7 @@
 	- multipule windows; even just horiz layouts
 	- VISUAL mode/selection
 	- folds
+	- syntax where the rep count comes before the action -> 3dw instead of d3w
 
 - Language Server Protocol
 	- low-level client

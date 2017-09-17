@@ -69,9 +69,9 @@ impl CommandMode {
                 }
             },
             Some('"') => {
-                println!("-- registers --");
-                for (r, v) in app.registers.iter() {
-                    println!("\"{} = {}", r.0, v.escape_default());
+                println!("-- clipstacks --");
+                for (r, v) in app.clipstacks.iter() {
+                    println!("\"{} = {:?}", r.0, v);
                 }
                 Ok(Some(Box::new(NormalMode::new())))
             },

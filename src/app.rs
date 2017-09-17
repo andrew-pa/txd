@@ -13,13 +13,13 @@ use mode;
 use winit::Event;
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
-pub struct RegisterId(pub char);
+pub struct ClipstackId(pub char);
 
 pub struct State {
     pub bufs: Vec<Rc<RefCell<Buffer>>>,
     pub res: Rc<RefCell<Resources>>,
     pub current_buffer: usize,
-    pub registers: HashMap<RegisterId, String>,
+    pub clipstacks: HashMap<ClipstackId, Vec<String>>,
     pub should_quit: bool
 }
 
@@ -30,6 +30,19 @@ impl State {
 
     pub fn mutate_buf<R, F: FnOnce(&mut Buffer)->R>(&mut self, f: F) -> R {
         f(&mut self.bufs[self.current_buffer].borrow_mut())
+    }
+
+    pub fn push_clip(&mut self, id: &ClipstackId, s: String) {
+        let mut stack = self.clipstacks.entry(id.clone()).or_insert(Vec::new());
+        stack.push(s);
+    }
+
+    pub fn top_clip(&self, id: &ClipstackId) -> Option<String> {
+        self.clipstacks.get(id).and_then(|sk| sk.last()).map(Clone::clone)
+    }
+
+    pub fn pop_clip(&mut self, id: &ClipstackId) -> Option<String> {
+        self.clipstacks.get_mut(id).and_then(|sk| sk.pop())
     }
 }
 
@@ -50,7 +63,7 @@ impl TxdApp {
         TxdApp { state: State {
                 bufs: vec![cmd, buf],
                 current_buffer: 1,
-                registers: HashMap::new(), res,
+                clipstacks: HashMap::new(), res,
                 should_quit: false
             }, mode: Box::new(mode::NormalMode::new()), last_err: None
         }

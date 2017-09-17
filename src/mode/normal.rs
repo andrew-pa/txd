@@ -2,7 +2,7 @@
 use super::*;
 use winit::{WindowEvent};
 use movement::Movement;
-use app::RegisterId;
+use app::ClipstackId;
 
 //Normal Mode
 pub struct NormalMode {
@@ -26,22 +26,22 @@ pub struct NormalMode {
 #[derive(Debug)]
 enum Action {
     Move(Movement),
-    Delete(Movement, RegisterId),
-    Change(Movement, RegisterId),
+    Delete(Movement, ClipstackId),
+    Change(Movement, ClipstackId),
     Insert, InsertLine, Append, Command,
     Replace(char),
-    Yank(Movement, RegisterId),
-    Put(RegisterId)
+    Yank(Movement, ClipstackId),
+    Put(ClipstackId, bool /* copy or pop */)
 }
 
 impl Action {
     fn parse(s: &str) -> Option<Action> {
         let mut cs = s.trim().char_indices().peekable();
-        let mut reg = RegisterId('"'); //default register is ""
+        let mut reg = ClipstackId('"'); //default register is ""
         if let Some(&(_, '"')) = cs.peek() {
             if cs.next().is_none() { return None }
             reg = match cs.next() {
-                Some((_, c)) => RegisterId(c),
+                Some((_, c)) => ClipstackId(c),
                 None => return None
             };
         }
@@ -58,7 +58,8 @@ impl Action {
                     'd' => Movement::parse(s.split_at(i+1).1, false).map(|m| Action::Delete(m,reg)),
                     'c' => Movement::parse(s.split_at(i+1).1, false).map(|m| Action::Change(m,reg)),
                     'y' => Movement::parse(s.split_at(i+1).1, false).map(|m| Action::Yank(m,reg)),
-                    'p' => Some(Action::Put(reg)),
+                    'p' => Some(Action::Put(reg, false)),
+                    'P' => Some(Action::Put(reg, true)),
                     'r' => cs.next().map(|(_,c)| Action::Replace(c)),
                     _ => Movement::parse(s, true).map(Action::Move),
                 }
@@ -68,18 +69,20 @@ impl Action {
     }
 
     fn execute(&self, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
+        // could probably just take plain `self` and move into execute(), as it works in the only
+        // context this function is called in right now
         match self {
             &Action::Move(ref mv) => {
                 app.mutate_buf(|b| b.make_movement(mv.clone())); Ok(None)
             },
             &Action::Delete(ref mv, ref r) => {
                 let v = app.mutate_buf(|b| b.delete_movement(mv.clone()));
-                app.registers.insert(r.clone(), v);
+                app.push_clip(r, v);
                 Ok(None)
             },
             &Action::Change(ref mv, ref r) => {
                 let v = app.mutate_buf(|b| b.delete_movement(mv.clone())); 
-                app.registers.insert(r.clone(), v);
+                app.push_clip(r, v);
                 Ok(Some(Box::new(InsertMode::new())))
             },
             &Action::Replace(c) => app.mutate_buf(|b| {
@@ -99,15 +102,19 @@ impl Action {
             },
             &Action::Yank(ref mv, ref r) => {
                 let v = { app.bufs[app.current_buffer].borrow().yank_movement(mv.clone()) };
-                app.registers.insert(r.clone(), v);
+                app.push_clip(r, v);
                 Ok(None)
             },
-            &Action::Put(ref r) => {
-                let pv = app.registers.get(r);
+            &Action::Put(ref r, copy) => {
+                let pv = if copy {
+                    app.top_clip(r)
+                } else {
+                    app.pop_clip(r)
+                };
                 if pv.is_some() {
                     let mut _b = &mut app.bufs[app.current_buffer];
                     let mut b = _b.borrow_mut();
-                    b.insert_string(pv.unwrap());
+                    b.insert_string(&pv.unwrap());
                 }
                 Ok(None)
             },
