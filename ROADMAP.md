@@ -11,21 +11,21 @@
 	+ [done needs configuration] Tab key working
 	+ [done; fixed in runic] Proper key repeat
 	+ [done] open previous buffer (:b#)
+	+ [done] Fix viewport wrt insertion
+	+ [done] y/p/P commands + clipstacks
 
 
 ## things that need to be done ##
 	- Configuration stuff (colors! fonts! commands?)
 		- High priority because many things are blocked due to the fact that they require configuration and it's unknown how that will work
-	- Copy/Paste (Ctrl-C/Ctrl-V and y/p) + registers... or stacks.
-		- Could make it so that there were a number of named stacks. would make the classic copy/paste juggling much better
-		- [done: stacks, y/p/P, need: C-C, C-V]
-		- notably it would reduce the need for so many, but add perhaps a way to index into the stack, also move between them
+	- Copy/Paste (Ctrl-C/Ctrl-V)
+		- add perhaps a way to index into the stack, also move between them (dup/swap?)
 	- Undo
 		- Move Action parse/commit code into Buffer from Normal mode to support Undo
+		- Make insertion an Action that actually holds the inserted content???
 	- Paragraph movements
 	- Buffer List
 	- Current Directory
-	- Fix viewport wrt insertion
 	- Mouse support
 	- Tab completion on buffer names/file system
 	- Make buffer rep more reasonable
@@ -33,6 +33,7 @@
 		- Huuuuuge files
 	- Search (with regex) might be good; '/' command
 	- :s ed command?
+		- ed/ex commands!
 	- indentation commands (=, <<, >>)
 	- auto-indentation
 	- [done sorta] fix split long lines so they do normal, regular things
@@ -43,6 +44,7 @@
 	- resizing the window should change the line wrap
 	- command output, somewhere
 	- inclusive/exclusive/linewise motions like Vim
+	- close buffers
 
 - Language Server Protocol
 	- low-level client

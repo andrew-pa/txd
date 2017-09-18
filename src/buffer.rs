@@ -98,11 +98,13 @@ impl Buffer {
         while !cln.is_char_boundary(cursor_col as usize) { println!("{}", cursor_col); cursor_col += dx.signum(); }
 
 
-        if cursor_line < self.viewport_start as isize {
-            self.viewport_start = self.viewport_start.saturating_sub(3);
+        while cursor_line < self.viewport_start as isize {
+            self.viewport_start = self.viewport_start.saturating_sub(1);
         }
-        if cursor_line >= self.viewport_end as isize {
-            self.viewport_start = self.viewport_start.saturating_add(3);
+        while cursor_line >= self.viewport_end as isize {
+            let len = self.viewport_end - self.viewport_start;
+            self.viewport_start = self.viewport_start.saturating_add(1);
+            self.viewport_end = self.viewport_start+len;
         }
 
         self.cursor_col = cursor_col as usize;
@@ -254,6 +256,7 @@ impl Buffer {
         self.lines.insert(loc.1+1, new_line);
         self.invalidate_line(loc.1);
         self.line_layouts.insert(loc.1, None);
+        self.viewport_end += 1;
         self.cursor_col = 0; self.move_cursor((0,1));
     }
     pub fn insert_line(&mut self, val: Option<&str>) {
@@ -313,10 +316,12 @@ impl Buffer {
         let mut p = Point::xy(bnd.x, bnd.y);
         let mut line = self.viewport_start;
         rx.set_color(Color::rgb(0.9, 0.9, 0.9));
-        while p.y < bnd.y+bnd.h && line < self.line_layouts.len() {
+        'lineloop: while line < self.line_layouts.len() {
             let mut replace = false;
             match self.line_layouts[line] {
                 Some(ref l) => { 
+                    let b = l.bounds();
+                    if p.y + b.h > bnd.y+bnd.h { break 'lineloop; }
                     rx.draw_text_layout(p, &l);
 
                     //draw cursor
@@ -329,7 +334,6 @@ impl Buffer {
                         rx.set_color(Color::rgb(0.9, 0.9, 0.9));
                     }
 
-                    let b = l.bounds();
                     p.y += b.h;
                 }
                 None => {
