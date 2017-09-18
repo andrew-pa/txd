@@ -10,6 +10,7 @@
 	- Word movements [done, except e/b movements are very broken, largly doesn't quite land cursor where one expects]
 	+ [done needs configuration] Tab key working
 	+ [done; fixed in runic] Proper key repeat
+	+ [done] open previous buffer (:b#)
 
 
 ## things that need to be done ##
@@ -27,7 +28,6 @@
 	- Fix viewport wrt insertion
 	- Mouse support
 	- Tab completion on buffer names/file system
-	- open previous buffer (:b#)
 	- Make buffer rep more reasonable
 		- Add modified flag + render it
 		- Huuuuuge files
@@ -40,6 +40,9 @@
 	- VISUAL mode/selection
 	- folds
 	- syntax where the rep count comes before the action -> 3dw instead of d3w
+	- resizing the window should change the line wrap
+	- command output, somewhere
+	- inclusive/exclusive/linewise motions like Vim
 
 - Language Server Protocol
 	- low-level client

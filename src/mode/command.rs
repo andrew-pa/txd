@@ -55,16 +55,21 @@ impl CommandMode {
             Some('e') => {
                 let (e, path) = cmd.split_at(1);
                 app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app.res.clone())?)));
-                app.current_buffer = app.bufs.len()-1;
+                let ix = app.bufs.len()-1;
+                app.move_to_buffer(ix);
                 Ok(Some(Box::new(NormalMode::new())))
             },
             Some('b') => {
                 let (b, num) = cmd.split_at(1);
-                let ix = num.trim().parse::<usize>()?;
+                let ix = if num == "#" {
+                    app.last_buffer
+                } else {
+                    num.trim().parse::<usize>()?
+                };
                 if ix < 1 || ix >= app.bufs.len() {
                     Err(Box::new(CommandError::InvalidCommand(Some("Invalid buffer index"))))
                 } else {
-                    app.current_buffer = ix;
+                    app.move_to_buffer(ix);
                     Ok(Some(Box::new(NormalMode::new())))
                 }
             },

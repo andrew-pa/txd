@@ -18,6 +18,7 @@ pub struct ClipstackId(pub char);
 pub struct State {
     pub bufs: Vec<Rc<RefCell<Buffer>>>,
     pub res: Rc<RefCell<Resources>>,
+    pub last_buffer: usize,
     pub current_buffer: usize,
     pub clipstacks: HashMap<ClipstackId, Vec<String>>,
     pub should_quit: bool
@@ -44,6 +45,11 @@ impl State {
     pub fn pop_clip(&mut self, id: &ClipstackId) -> Option<String> {
         self.clipstacks.get_mut(id).and_then(|sk| sk.pop())
     }
+
+    pub fn move_to_buffer(&mut self, ix: usize) {
+        self.last_buffer = self.current_buffer;
+        self.current_buffer = ix;
+    }
 }
 
 pub struct TxdApp {
@@ -62,7 +68,7 @@ impl TxdApp {
         { cmd.borrow_mut().show_cursor = false; }
         TxdApp { state: State {
                 bufs: vec![cmd, buf],
-                current_buffer: 1,
+                current_buffer: 1, last_buffer: 1,
                 clipstacks: HashMap::new(), res,
                 should_quit: false
             }, mode: Box::new(mode::NormalMode::new()), last_err: None
