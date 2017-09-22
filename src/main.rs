@@ -1,5 +1,6 @@
 #![feature(box_patterns)]
 #![feature(str_escape)]
+#![feature(slice_patterns)]
 extern crate runic;
 extern crate winit;
 
@@ -10,6 +11,7 @@ mod mode;
 mod res;
 mod app;
 mod movement;
+//mod fs_util;
 
 use runic::*;
 use winit::*;

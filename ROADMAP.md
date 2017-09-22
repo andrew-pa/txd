@@ -28,6 +28,7 @@
 	- Current Directory
 	- Mouse support
 	- Tab completion on buffer names/file system
+	- don't reload already open files into a new buffer
 	- Make buffer rep more reasonable
 		- Add modified flag + render it
 		- Huuuuuge files

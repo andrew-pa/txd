@@ -2,7 +2,6 @@ use runic::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
-use std::path::Path;
 use std::env;
 use std::collections::HashMap;
 
@@ -52,6 +51,8 @@ impl State {
     }
 }
 
+use std::path::{Path, PathBuf};
+
 pub struct TxdApp {
     state: State,
     last_err: Option<Box<Error>>,
@@ -66,6 +67,7 @@ impl TxdApp {
                                                 |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
+        println!("cd = {}, canoncd = {}", ::std::env::current_dir().unwrap().display(), ::std::env::current_dir().unwrap().canonicalize().unwrap().display());
         TxdApp { state: State {
                 bufs: vec![cmd, buf],
                 current_buffer: 1, last_buffer: 1,

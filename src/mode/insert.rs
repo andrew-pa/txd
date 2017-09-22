@@ -40,8 +40,8 @@ impl Mode for InsertMode {
                     }
                     VirtualKeyCode::Back => {
                         if cloc.0 != 0 {
-                            buf.delete_char();
                             buf.move_cursor((-1, 0));
+                            buf.delete_char();
                         }
                         Ok(None)
                     }

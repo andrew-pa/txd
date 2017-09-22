@@ -91,11 +91,14 @@ impl Buffer {
         if cursor_line < 0 { cursor_line = 0; }
 
         let bl = &self.lines;
-        if cursor_line >= (bl.len() as isize) { cursor_line = (bl.len()-1) as isize; }
+        if bl.len() == 0 { cursor_line = 0; }
+        else {
+            if cursor_line >= (bl.len() as isize) { cursor_line = (bl.len()-1) as isize; } 
 
-        let cln = &bl[cursor_line as usize];
-        if cursor_col as usize > cln.len() { cursor_col = cln.len() as isize; }
-        while !cln.is_char_boundary(cursor_col as usize) { println!("{}", cursor_col); cursor_col += dx.signum(); }
+            let cln = &bl[cursor_line as usize];
+            if cursor_col as usize > cln.len() { cursor_col = cln.len() as isize; }
+            while !cln.is_char_boundary(cursor_col as usize) { println!("{}", cursor_col); cursor_col += dx.signum(); }
+        }
 
 
         while cursor_line < self.viewport_start as isize {
@@ -171,7 +174,11 @@ impl Buffer {
         match mv {
             Movement::WholeLine => {
                 removed = Some(self.lines.remove(self.cursor_line) + "\n");
-                self.line_layouts.remove(self.cursor_line);
+                if self.lines.len() == 0 {
+                    self.lines.push(String::new());
+                } else {
+                    self.line_layouts.remove(self.cursor_line);
+                }
             },
             Movement::Rep(count, box Movement::WholeLine) => {
                 removed = Some(self.lines.drain(self.cursor_line..(self.cursor_line+count)).fold(String::from(""), |s,l| s+&l+"\n" ));
@@ -181,7 +188,7 @@ impl Buffer {
                 let offset = self.movement_cursor_offset(mv);
                 if offset.1 == 0 { //deleting within the current line
                     let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
-                    println!("deleting: {}, {}", self.cursor_col, last);
+                    //println!("deleting: {}, {}", self.cursor_col, last);
                     removed = Some(self.lines[self.cursor_line]
                                    .drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last })
                                    .collect::<String>());
@@ -208,7 +215,7 @@ impl Buffer {
                 let offset = self.movement_cursor_offset(mv);
                 if offset.1 == 0 { //deleting within the current line
                     let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
-                    println!("yanking: {}, {}", self.cursor_col, last);
+                    //println!("yanking: {}, {}", self.cursor_col, last);
                     let mut s = String::new();
                     s.push_str(&self.lines[self.cursor_line][if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last }]);
                     s
