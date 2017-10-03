@@ -1,7 +1,7 @@
 
 use super::*;
 use winit::*;
-use movement::Movement;
+use movement::*;
 
 pub struct InsertMode {
     target_buffer: Option<usize>
@@ -49,8 +49,8 @@ impl Mode for InsertMode {
                         buf.insert_tab();
                         Ok(None)
                     }
-                    VirtualKeyCode::Up => { buf.make_movement(Movement::Line(true)); Ok(None) }
-                    VirtualKeyCode::Down => { buf.make_movement(Movement::Line(false)); Ok(None) }
+                    VirtualKeyCode::Up => { buf.make_movement(Movement::Line(true, Inclusion::Linewise)); Ok(None) }
+                    VirtualKeyCode::Down => { buf.make_movement(Movement::Line(false, Inclusion::Linewise)); Ok(None) }
                     VirtualKeyCode::Left => { buf.make_movement(Movement::Char(false)); Ok(None) }
                     VirtualKeyCode::Right => { buf.make_movement(Movement::Char(true)); Ok(None) }
                     VirtualKeyCode::Escape => { Ok(Some(Box::new(NormalMode::new()))) }

@@ -46,6 +46,8 @@
 	- command output, somewhere
 	- inclusive/exclusive/linewise motions like Vim
 	- close buffers
+	- some sort of notification system / output from commands. It'd be nice if this was together, but it might look slightly odd wrt things like listing buffers and then getting error messages
+	- markdown rendering
 
 - Language Server Protocol
 	- low-level client

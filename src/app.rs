@@ -108,7 +108,8 @@ impl App for TxdApp {
         rx.set_color(Color::rgb(0.4, 0.6, 0.0));
         rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), &res.font);
         rx.set_color(Color::rgb(0.9, 0.4, 0.0));
-        rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0), &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
+        rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0),
+                     &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
                      &res.font);
         rx.set_color(Color::rgb(0.0, 0.6, 0.4));
         rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0),
