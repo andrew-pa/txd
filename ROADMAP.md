@@ -40,6 +40,7 @@
 	- multipule windows; even just horiz layouts
 	- VISUAL mode/selection
 	- folds
+	- 'zz' command; center viewport; also maybe viewport movement (page up/down)
 	- syntax where the rep count comes before the action -> 3dw instead of d3w
 	- resizing the window should change the line wrap
 	- command output, somewhere
