@@ -8,21 +8,39 @@
 // $: end of line
 // ^: start of line
 // <number>[mov]: repeated movement n times
+
+#[derive(Debug, Copy, Clone)]
+pub enum Inclusion {
+    Exclusive,
+    Inclusive,
+    Linewise
+}
+
 #[derive(Debug, Clone)]
 pub enum Movement {
-    Char(bool),
-    Line(bool),
-    Word(bool, bool), // (forward, place at end)
+    Char(bool /*left/right*/),
+    Line(bool /*up/down*/, Inclusion),
+    Word(bool /*forwards/backwards*/, Inclusion),
     CharScan {
-        query: char, forwards: bool, place_besides: bool
+        query: char, direction: bool, inclusion: Inclusion
     },
     StartOfLine,
-    WholeLine,
     EndOfLine,
     Rep(usize, Box<Movement>)
 }
 
 impl Movement {
+    pub fn inclusion_mode(&self) -> Inclusion {
+        match self {
+            &Movement::Char(_) => Inclusion::Inclusive,
+            &Movement::Line(_, i) => i,
+            &Movement::Word(_, i) => i,
+            &Movement::CharScan { inclusion: i, .. } => i,
+            &Movement::StartOfLine => Inclusion::Exclusive,
+            &Movement::EndOfLine => Inclusion::Inclusive,
+            &Movement::Rep(_, ref mv) => mv.inclusion_mode()
+        }
+    }
     pub fn parse(s: &str, first: bool) -> Option<Movement> {
         //println!("parse movment {}", s);
         use self::Movement::*;
@@ -39,23 +57,24 @@ impl Movement {
                 } else {
                     match c {
                         'h' => Some(Char(false)),
-                        'j' => Some(Line(false)),
-                        'k' => Some(Line(true)),
+                        'j' => Some(Line(false, Inclusion::Linewise)),
+                        'k' => Some(Line(true, Inclusion::Linewise)),
                         'l' => Some(Char(true)),
-                        'w' => Some(Word(true, false)),
-                        'b' => Some(Word(false, false)),
-                        'e' => Some(Word(false, true)),
+                        'w' => Some(Word(true, Inclusion::Exclusive)),
+                        'b' => Some(Word(false, Inclusion::Exclusive)),
+                        'e' => Some(Word(false, Inclusion::Inclusive)),
                         '^' => Some(StartOfLine),
-                        'J' => Some(WholeLine),
+                        'J' => Some(Line(false, Inclusion::Inclusive)),
                         '$' => Some(EndOfLine),
-                        't' => cs.next().map(|(_,q)| CharScan { query: q, forwards: true, place_besides: true }),
-                        'T' => cs.next().map(|(_,q)| CharScan { query: q, forwards: false, place_besides: true }),
-                        'f' => cs.next().map(|(_,q)| CharScan { query: q, forwards: true, place_besides: false }),
-                        'F' => cs.next().map(|(_,q)| CharScan { query: q, forwards: false, place_besides: false }),
+                        't' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Inclusive, direction: false }),
+                        'T' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Exclusive, direction: true }),
+                        'f' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Inclusive, direction: false }),
+                        'F' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Exclusive, direction: true }),
                         _ => if !first {
                             match c {
-                                'd' => Some(WholeLine),
-                                'c' => Some(WholeLine),
+                                'd' => Some(Line(false, Inclusion::Inclusive)),
+                                'c' => Some(Line(false, Inclusion::Inclusive)),
+                                'y' => Some(Line(false, Inclusion::Inclusive)),
                                 _ => None
                             }
                         } else { None }

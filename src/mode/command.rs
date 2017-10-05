@@ -43,44 +43,64 @@ impl CommandMode {
     }
 
     pub fn execute(&self, app: &mut app::State) -> Result<Option<Box<Mode>>, Box<Error>> {
-        let cmd = { 
+        let _cmd = { 
             app.bufs[0].borrow().lines.last().unwrap().clone()
         };
-        match cmd.chars().next() {
-            Some('q') => { app.should_quit = true; Ok(Some(Box::new(NormalMode::new()))) },
-            Some('w') => {
+        let mut cmd = _cmd.split_whitespace(); 
+        let first_word = match cmd.next() {
+            Some(s) => s,
+            None => return Err(Box::new(CommandError::UnknownCommand))
+        };
+        match first_word {
+            "q" => { app.should_quit = true; Ok(Some(Box::new(NormalMode::new()))) },
+            "w" => {
                 app.mutate_buf(|b| b.sync_disk())?;
                 Ok(Some(Box::new(NormalMode::new())))
             },
-            Some('e') => {
-                let (e, path) = cmd.split_at(1);
-                app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app.res.clone())?)));
+            "e" => {
+                app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(
+                                    cmd.next().ok_or(Box::new(CommandError::InvalidCommand(Some("missing path"))))?.trim()), app.res.clone())?)));
                 let ix = app.bufs.len()-1;
                 app.move_to_buffer(ix);
                 Ok(Some(Box::new(NormalMode::new())))
             },
-            Some('b') => {
-                let (b, num) = cmd.split_at(1);
-                let ix = if num == "#" {
-                    app.last_buffer
-                } else {
-                    num.trim().parse::<usize>()?
-                };
-                if ix < 1 || ix >= app.bufs.len() {
-                    Err(Box::new(CommandError::InvalidCommand(Some("Invalid buffer index"))))
-                } else {
-                    app.move_to_buffer(ix);
-                    Ok(Some(Box::new(NormalMode::new())))
-                }
+            "cd" => {
+                ::std::env::set_current_dir(cmd.next().ok_or(Box::new(CommandError::InvalidCommand(Some("missing path"))))?)?;
+                Ok(Some(Box::new(NormalMode::new())))
             },
-            Some('"') => {
+            "\"" => {
                 println!("-- clipstacks --");
                 for (r, v) in app.clipstacks.iter() {
                     println!("\"{} = {:?}", r.0, v);
                 }
                 Ok(Some(Box::new(NormalMode::new())))
             },
-            _ => Err(Box::new(CommandError::UnknownCommand))
+            _ => {
+                match first_word.chars().next() {
+                    Some('e') => {
+                        let (e, path) = first_word.split_at(1);
+                        app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app.res.clone())?)));
+                        let ix = app.bufs.len()-1;
+                        app.move_to_buffer(ix);
+                        Ok(Some(Box::new(NormalMode::new())))
+                    }
+                    Some('b') => { 
+                        let (b, num) = first_word.split_at(1);
+                        let ix = if num == "#" {
+                            app.last_buffer
+                        } else {
+                            num.trim().parse::<usize>()?
+                        };
+                        if ix < 1 || ix >= app.bufs.len() {
+                            Err(Box::new(CommandError::InvalidCommand(Some("Invalid buffer index"))))
+                        } else {
+                            app.move_to_buffer(ix);
+                            Ok(Some(Box::new(NormalMode::new())))
+                        }
+                    }
+                    _ => Err(Box::new(CommandError::UnknownCommand))
+                }
+            }
         }
     }
 }

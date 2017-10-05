@@ -7,7 +7,7 @@ use std::cmp::min;
 
 use runic::*;
 use res::Resources;
-use movement::Movement;
+use movement::*;
 
 #[derive(Debug)]
 pub enum TabStyle {
@@ -84,32 +84,38 @@ impl Buffer {
         Ok(buf)
     }
 
-    pub fn move_cursor(&mut self, (dx, dy): (isize,isize)) {
-        let mut cursor_col = self.cursor_col as isize + dx;
-        let mut cursor_line = self.cursor_line as isize + dy;
-        if cursor_col < 0 { cursor_col = 0; }
-        if cursor_line < 0 { cursor_line = 0; }
-
+    pub fn place_cursor(&mut self, mut cursor_col: usize, mut cursor_line: usize) {
         let bl = &self.lines;
-        if cursor_line >= (bl.len() as isize) { cursor_line = (bl.len()-1) as isize; }
+        if bl.len() == 0 { cursor_line = 0; }
+        else {
+            if cursor_line >= bl.len() { cursor_line = (bl.len()-1); } 
 
-        let cln = &bl[cursor_line as usize];
-        if cursor_col as usize > cln.len() { cursor_col = cln.len() as isize; }
-        while !cln.is_char_boundary(cursor_col as usize) { println!("{}", cursor_col); cursor_col += dx.signum(); }
+            let cln = &bl[cursor_line];
+            if cursor_col > cln.len() { cursor_col = cln.len(); }
+            while !cln.is_char_boundary(cursor_col) { println!("{}", cursor_col); cursor_col += 1; }
+        }
 
 
-        while cursor_line < self.viewport_start as isize {
+        while cursor_line < self.viewport_start {
             self.viewport_start = self.viewport_start.saturating_sub(1);
         }
-        while cursor_line >= self.viewport_end as isize {
+        while cursor_line >= self.viewport_end {
             let len = self.viewport_end - self.viewport_start;
             self.viewport_start = self.viewport_start.saturating_add(1);
             self.viewport_end = self.viewport_start+len;
         }
 
-        self.cursor_col = cursor_col as usize;
-        self.cursor_line = cursor_line as usize;
+        self.cursor_col = cursor_col;
+        self.cursor_line = cursor_line;
     }
+
+    pub fn move_cursor(&mut self, (dx, dy): (isize,isize)) {
+        let mut cursor_col = self.cursor_col as isize + dx;
+        let mut cursor_line = self.cursor_line as isize + dy;
+        if cursor_col < 0 { cursor_col = 0; }
+        if cursor_line < 0 { cursor_line = 0; }
+        self.place_cursor(cursor_col as usize, cursor_line as usize);
+   }
 
     pub fn curr_loc(&self) -> (usize, usize) {
         (self.cursor_col, self.cursor_line)
@@ -120,22 +126,42 @@ impl Buffer {
     pub fn scan_line<P: Fn(char)->bool>(&self, pred: P, forwards: bool) -> Option<isize> {
         let (left, right) = self.lines[self.cursor_line].split_at(self.cursor_col + if forwards {1} else {0});
         //println!("({}, {})", left, right);
-        (if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize)) })
+        if forwards {
+            right.find(pred).map(|v| v as isize + 1)
+        } else {
+            left.rfind(pred).map(|v| -(left.len() as isize - v as isize))
+        }
     }
 
-    pub fn movement_cursor_offset(&self, mv: Movement) -> (isize, isize) {
+    /// calculate the range of a movement from where the cursor is currently located to the end of
+    /// the movement, inclusive. The first tuple will usually be the same as the current cursor
+    /// location except in cases where the movement includes an entire line, for instance. The
+    /// second tuple is the end of the movement absolute.
+    pub fn movement_range(&self, mv: Movement) -> ((usize, usize), (usize, usize)) {
+        fn wrapadd1(a: usize, b: bool) -> usize {
+            if b { a.saturating_add(1) } else { a.saturating_sub(1) }
+        }
         //println!("movement = {:?}", mv);
+        let cur = self.curr_loc();
         match mv {
-            Movement::Char(right) => (if right {1} else {-1}, 0),
-            Movement::Line(up) => (0, if up {-1} else {1}),
-            Movement::WholeLine => (0, 1),
-            Movement::CharScan { query, forwards, place_besides } => {
-                match self.scan_line(|q| q==query, forwards) {
-                    Some(col) => (col + if place_besides { if forwards {-1} else {1} } else {0}, 0),
-                    None => (0,0)
+            Movement::Char(right) => (cur, (wrapadd1(cur.0, right), cur.1)),
+            Movement::Line(up, m) => match m {
+                Inclusion::Linewise => (cur, (cur.0, wrapadd1(cur.1, !up))),
+                Inclusion::Inclusive => ((0, cur.1), (0, wrapadd1(cur.1, !up))),
+                Inclusion::Exclusive => panic!("Exclusive line movement")
+            },
+            Movement::CharScan { query, direction, inclusion } => {
+                match self.scan_line(|q| q==query, direction) {
+                    Some(col) => match inclusion {
+                        Inclusion::Inclusive => (cur, (col as usize, cur.1)), 
+                        Inclusion::Exclusive => (cur, (wrapadd1(col as usize, direction), cur.1)), 
+                        Inclusion::Linewise => panic!("Linewise character scan")
+                        //(col + if place_besides { if forwards {-1} else {1} } else {0}, 0),
+                    },
+                    None => (cur,cur)
                 }
             }
-            Movement::Word(forwards, place_at_end) => {
+            /*Movement::Word(forwards, inclusion) => {
                 // this is preliminary. code reuse is sad (copy-pasta from scan_line); additionally
                 // the definition of a word may change. Also new, more effecient buffer
                 // representations may make this operation much simpler/different
@@ -146,32 +172,59 @@ impl Buffer {
                     Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0}, 0),
                     None => (0,0)
                 }
-            },
-            Movement::EndOfLine => (self.lines[self.cursor_line].len() as isize-self.cursor_col as isize, 0),
-            Movement::StartOfLine => (0,0),
-            Movement::Rep(count, movement) => {
+            },*/
+            Movement::EndOfLine => (cur, (self.lines[self.cursor_line].len(), 0)),
+            Movement::StartOfLine => (cur, (0,cur.1)),
+            /*Movement::Rep(count, movement) => {
                 let mut offset = (0,0);
                 for _ in 0..count {
                     let (dx, dy) = self.movement_cursor_offset(*movement.clone());
                     offset.0 += dx; offset.1 += dy;
                 }
-                offset
-            }
+                (cur, (cur.0 + offset.0, cur.1 + offset.1))
+            }*/
+            _ => panic!("")
         }
     }
 
     pub fn make_movement(&mut self, mv: Movement) {
-        let offset = self.movement_cursor_offset(mv);
-        //println!("offset = {:?}", offset);
-        self.move_cursor(offset)
+        let new_pos = self.movement_range(mv).1;
+        self.place_cursor(new_pos.0, new_pos.1);
     }
 
     pub fn delete_movement(&mut self, mv: Movement) -> String {
-        let mut removed: Option<String> = None;
-        match mv {
+        let mut removed = String::new();
+        // movement_range(mv) calculates range for movement mv. Must delete all selected
+        // lines+chars. Easy ranges are say (6, n) -> (10, n) where it's all in one line. the
+        // harder ranges are those like (0, n) -> (0, n+3) where it deletes whole lines, and the
+        // hardest are probably ones like (6,7) -> (8,12) where it deletes whole lines and
+        // intraline characters
+        let (start, end) = self.movement_range(mv);
+        for line in (start.1)..(end.1+1) {
+            self.line_layouts[line] = None;
+        }
+
+        if start.1 == end.1 { // all in the same line
+            removed.push_str(&self.lines[start.1]
+                           .drain(if start.0 > end.0 { (end.0)..(start.0) } else { (start.0)..(end.0) })
+                           .collect::<String>());
+        } else {
+            if start.0 == 0 { //deleting the whole first line
+                removed.push_str(&self.lines.remove(start.1));
+            } else {
+                removed.push_str(&self.lines[self.cursor_line]
+                           .drain((start.0)..)
+                           .collect::<String>());
+            }
+        }
+        /*match mv {
             Movement::WholeLine => {
                 removed = Some(self.lines.remove(self.cursor_line) + "\n");
-                self.line_layouts.remove(self.cursor_line);
+                if self.lines.len() == 0 {
+                    self.lines.push(String::new());
+                } else {
+                    self.line_layouts.remove(self.cursor_line);
+                }
             },
             Movement::Rep(count, box Movement::WholeLine) => {
                 removed = Some(self.lines.drain(self.cursor_line..(self.cursor_line+count)).fold(String::from(""), |s,l| s+&l+"\n" ));
@@ -179,24 +232,22 @@ impl Buffer {
             },
             _ => {
                 let offset = self.movement_cursor_offset(mv);
-                if offset.1 == 0 { //deleting within the current line
-                    let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
-                    println!("deleting: {}, {}", self.cursor_col, last);
-                    removed = Some(self.lines[self.cursor_line]
-                                   .drain(if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last })
-                                   .collect::<String>());
-                    self.line_layouts[self.cursor_line] = None;
+                if offset.1 == 0 {
                 } else {
+                    // delete the "rest" of the current line
+                    // delete the lines in the middle
+                    // delete the "rest" of the final line
                     panic!("tried to delete multiline range");
                 }
             }
-        }
-        self.move_cursor((0,0)); //ensure that the cursor is in a valid position
-        removed.unwrap()
+        }*/
+        self.place_cursor(end.0, end.1); //ensure that the cursor is in a valid position
+        removed
     }
 
     pub fn yank_movement(&self, mv: Movement) -> String {
-        match mv {
+        panic!("yank");
+        /*match mv {
             Movement::WholeLine => {
                 self.lines[self.cursor_line].clone() + "\n"
             },
@@ -208,7 +259,7 @@ impl Buffer {
                 let offset = self.movement_cursor_offset(mv);
                 if offset.1 == 0 { //deleting within the current line
                     let last = min((offset.0 + self.cursor_col as isize) as usize, self.lines[self.cursor_line].len());
-                    println!("yanking: {}, {}", self.cursor_col, last);
+                    //println!("yanking: {}, {}", self.cursor_col, last);
                     let mut s = String::new();
                     s.push_str(&self.lines[self.cursor_line][if self.cursor_col > last { last..self.cursor_col } else { self.cursor_col..last }]);
                     s
@@ -216,7 +267,7 @@ impl Buffer {
                     panic!("tried to yank multiline range");
                 }
             }
-        }
+        }*/
     }
 
     pub fn clear(&mut self) {
@@ -263,6 +314,7 @@ impl Buffer {
         let loc = self.cursor_line;
         self.lines.insert(loc+1, val.map(|s| String::from(s)).unwrap_or_default());
         self.line_layouts.insert(loc+1, None);
+        self.viewport_end += 1;
         self.cursor_col = 0; self.move_cursor((0,1));
     }
     pub fn insert_tab(&mut self) {
@@ -351,4 +403,6 @@ impl Buffer {
         self.viewport_end = line;
     }
 
+    pub fn move_cursor_to_mouse(&mut self, p: Point) {
+    }
 }

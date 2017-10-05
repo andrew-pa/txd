@@ -2,7 +2,6 @@ use runic::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::error::Error;
-use std::path::Path;
 use std::env;
 use std::collections::HashMap;
 
@@ -52,6 +51,8 @@ impl State {
     }
 }
 
+use std::path::{Path, PathBuf};
+
 pub struct TxdApp {
     state: State,
     last_err: Option<Box<Error>>,
@@ -66,6 +67,7 @@ impl TxdApp {
                                                 |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
+        println!("cd = {}, canoncd = {}", ::std::env::current_dir().unwrap().display(), ::std::env::current_dir().unwrap().canonicalize().unwrap().display());
         TxdApp { state: State {
                 bufs: vec![cmd, buf],
                 current_buffer: 1, last_buffer: 1,
@@ -106,7 +108,8 @@ impl App for TxdApp {
         rx.set_color(Color::rgb(0.4, 0.6, 0.0));
         rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), &res.font);
         rx.set_color(Color::rgb(0.9, 0.4, 0.0));
-        rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0), &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
+        rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0),
+                     &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
                      &res.font);
         rx.set_color(Color::rgb(0.0, 0.6, 0.4));
         rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0),

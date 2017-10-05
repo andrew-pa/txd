@@ -28,6 +28,7 @@
 	- Current Directory
 	- Mouse support
 	- Tab completion on buffer names/file system
+	- don't reload already open files into a new buffer
 	- Make buffer rep more reasonable
 		- Add modified flag + render it
 		- Huuuuuge files
@@ -46,6 +47,8 @@
 	- command output, somewhere
 	- inclusive/exclusive/linewise motions like Vim
 	- close buffers
+	- some sort of notification system / output from commands. It'd be nice if this was together, but it might look slightly odd wrt things like listing buffers and then getting error messages
+	- markdown rendering
 
 - Language Server Protocol
 	- low-level client
