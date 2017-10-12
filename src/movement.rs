@@ -9,7 +9,7 @@
 // ^: start of line
 // <number>[mov]: repeated movement n times
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Inclusion {
     Exclusive,
     Inclusive,
@@ -22,7 +22,7 @@ pub enum Movement {
     Line(bool /*up/down*/, Inclusion),
     Word(bool /*forwards/backwards*/, Inclusion),
     CharScan {
-        query: char, direction: bool, inclusion: Inclusion
+        query: char, direction: bool, inclusion: Inclusion, place_to_side: bool
     },
     StartOfLine,
     EndOfLine,
@@ -32,7 +32,7 @@ pub enum Movement {
 impl Movement {
     pub fn inclusion_mode(&self) -> Inclusion {
         match self {
-            &Movement::Char(_) => Inclusion::Inclusive,
+            &Movement::Char(_) => Inclusion::Exclusive,
             &Movement::Line(_, i) => i,
             &Movement::Word(_, i) => i,
             &Movement::CharScan { inclusion: i, .. } => i,
@@ -66,10 +66,10 @@ impl Movement {
                         '^' => Some(StartOfLine),
                         'J' => Some(Line(false, Inclusion::Inclusive)),
                         '$' => Some(EndOfLine),
-                        't' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Inclusive, direction: false }),
-                        'T' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Exclusive, direction: true }),
-                        'f' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Inclusive, direction: false }),
-                        'F' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Exclusive, direction: true }),
+                        't' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Inclusive, direction: true, place_to_side: true }),
+                        'T' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Exclusive, direction: false, place_to_side: true }),
+                        'f' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Inclusive, direction: true, place_to_side: false }),
+                        'F' => cs.next().map(|(_,q)| CharScan { query: q, inclusion: Inclusion::Exclusive, direction: false, place_to_side: false }),
                         _ => if !first {
                             match c {
                                 'd' => Some(Line(false, Inclusion::Inclusive)),
