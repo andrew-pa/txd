@@ -177,40 +177,46 @@ impl Buffer {
                 }
             }
             Movement::Word(direction, inclusion) => {
-                // move to whatever comes to first:
-                //      non-alphanumeric chararacters
-                //      next alphanumeric character after whitespace or after a non-alphanumeric
-                //      character
+                /*
+                 * if we're on whitespace => move to next non-whitespace character
+                 * if we're on alphanumun => move until we hit non-alphanum character
+                 *                           if whitespace than move one past that
+                 * if we're on non-alphanum => move until we hit alphanum
+                */
                 let mut v = (cur..cur);
-                let mut last_char = ' ';
-                for (i, c) in self.lines[cur.1].char_indices().skip(cur.0+1) {
-                    if !char::is_alphanumeric(c) {
-                        v.end = (i + if !char::is_whitespace(c) { 0 } else { 1 }, cur.1);
-                        break;
-                    }
-                    /*if char::is_alphanumeric(c) || c == '_' {
-                        last_char = c;
-                        continue;
+                'main: while v.end.1 < self.lines.len() {
+                    let mut chars: Box<Iterator<Item = (usize, char)>> = if direction {
+                        Box::new(self.lines[v.end.1].char_indices().skip(v.end.0)) 
                     } else {
-                        v.end = (i+ if char::is_whitespace(c) || !char::is_alphanumeric(c) { 1 } else { 0 }, cur.1);
-                        break;
-                    }*/
+                        Box::new(self.lines[v.end.1].char_indices().rev().skip(self.lines[v.end.1].len()-v.end.0))
+                    };
+                    let mut j = 0;
+                    match chars.next() {
+                        Some((i ,c)) => {
+                            if char::is_alphanumeric(c) {
+                                for (i, c) in chars {
+                                    if !char::is_alphanumeric(c) {
+                                        v.end = (i + if !char::is_whitespace(c) { 0 } else { 1 }, v.end.1);
+                                        break 'main;
+                                    }
+                                }
+                            } else if char::is_whitespace(c) { 
+                                for (i, c) in chars {
+                                    if !char::is_whitespace(c) { v.end = (i, v.end.1); break 'main; }
+                                }
+                            } else {
+                                for (i, c) in chars {
+                                    if char::is_alphanumeric(c) { v.end = (i, v.end.1); break 'main; }
+                                }
+                            }
+                        }
+                        None => {
+                        }
+                    }
+                    let y = wrapadd1(v.end.1, direction);
+                    v.end = (if direction { 0 } else { self.lines[y].len() }, y);
                 }
                 v
-                /*match self.scan_line(|q| !(char::is_alphanumeric(q) || q == '_'), direction) {
-                    Some(col) => { (cur .. (/*if place_to_side { wrapadd1(col, !forwards) } else { col }*/wrapadd1(col, direction), cur.1)) },
-                    None => (cur..cur)
-                }*/
-                /*// this is preliminary. code reuse is sad (copy-pasta from scan_line); additionally
-                // the definition of a word may change. Also new, more effecient buffer
-                // representations may make this operation much simpler/different
-                let pred = |q| !(char::is_alphanumeric(q) || q == '_');
-                let (left, right) = self.lines[self.cursor_line].split_at((self.cursor_col as isize + if forwards {1} else {-1}) as usize);
-                //println!("({}, {})", left, right);
-                match if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize + 1)) } {
-                Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0}, 0),
-                None => (0,0)
-                }*/
             },
             Movement::EndOfLine => (cur..(self.lines[self.cursor_line].len(), cur.1)),
             Movement::StartOfLine => (cur..(0,cur.1)),
