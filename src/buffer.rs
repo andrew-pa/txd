@@ -152,34 +152,55 @@ impl Buffer {
         }*/
     }
 
+
     /// calculate the range of a movement from where the cursor is currently located to the end of
     /// the movement, in the range start <= x < end, like (start..end). The first tuple will usually be the same as the current cursor
     /// location except in cases where the movement includes an entire line, for instance. The
     /// second tuple is the end of the movement absolute.
-    pub fn movement_range(&self, mv: Movement) -> ((usize, usize), (usize, usize)) {
+    pub fn movement_range(&self, mv: Movement) -> ::std::ops::Range<(usize, usize)> {
         fn wrapadd1(a: usize, b: bool) -> usize {
             if b { a.saturating_add(1) } else { a.saturating_sub(1) }
         }
         //println!("movement = {:?}", mv);
         let cur = self.curr_loc();
         match mv {
-            Movement::Char(right) => (cur, (wrapadd1(cur.0, right), cur.1)),
+            Movement::Char(right) => (cur..(wrapadd1(cur.0, right), cur.1)),
             Movement::Line(up, m) => match m {
-                Inclusion::Linewise => (cur, (cur.0, wrapadd1(cur.1, !up))),
-                Inclusion::Inclusive => ((0, cur.1), (0, wrapadd1(cur.1, !up))),
+                Inclusion::Linewise => (cur..(cur.0, wrapadd1(cur.1, !up))),
+                Inclusion::Inclusive => ((0, cur.1)..(0, wrapadd1(cur.1, !up))),
                 Inclusion::Exclusive => panic!("Exclusive line movement")
             },
             Movement::CharScan { query, direction, inclusion, place_to_side } => {
                 match self.scan_line(|q| q==query, direction) {
-                    Some(col) => { (cur, (if place_to_side { wrapadd1(col, !direction) } else { col }, cur.1)) },
-                    None => (cur,cur)
+                    Some(col) => { (cur..(if place_to_side { wrapadd1(col, !direction) } else { col }, cur.1)) },
+                    None => (cur..cur)
                 }
             }
-            Movement::Word(forwards, inclusion) => {
-                match self.scan_line(|q| !(char::is_alphanumeric(q) || q == '_'), forwards) {
-                    Some(col) => { (cur, (/*if place_to_side { wrapadd1(col, !forwards) } else { col }*/col+1, cur.1)) },
-                    None => (cur,cur)
+            Movement::Word(direction, inclusion) => {
+                // move to whatever comes to first:
+                //      non-alphanumeric chararacters
+                //      next alphanumeric character after whitespace or after a non-alphanumeric
+                //      character
+                let mut v = (cur..cur);
+                let mut last_char = ' ';
+                for (i, c) in self.lines[cur.1].char_indices().skip(cur.0+1) {
+                    if !char::is_alphanumeric(c) {
+                        v.end = (i + if !char::is_whitespace(c) { 0 } else { 1 }, cur.1);
+                        break;
+                    }
+                    /*if char::is_alphanumeric(c) || c == '_' {
+                        last_char = c;
+                        continue;
+                    } else {
+                        v.end = (i+ if char::is_whitespace(c) || !char::is_alphanumeric(c) { 1 } else { 0 }, cur.1);
+                        break;
+                    }*/
                 }
+                v
+                /*match self.scan_line(|q| !(char::is_alphanumeric(q) || q == '_'), direction) {
+                    Some(col) => { (cur .. (/*if place_to_side { wrapadd1(col, !forwards) } else { col }*/wrapadd1(col, direction), cur.1)) },
+                    None => (cur..cur)
+                }*/
                 /*// this is preliminary. code reuse is sad (copy-pasta from scan_line); additionally
                 // the definition of a word may change. Also new, more effecient buffer
                 // representations may make this operation much simpler/different
@@ -187,26 +208,26 @@ impl Buffer {
                 let (left, right) = self.lines[self.cursor_line].split_at((self.cursor_col as isize + if forwards {1} else {-1}) as usize);
                 //println!("({}, {})", left, right);
                 match if forwards { right.find(pred).map(|v| v as isize + 1) } else { left.rfind(pred).map(|v| -(left.len() as isize - v as isize + 1)) } {
-                    Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0}, 0),
-                    None => (0,0)
+                Some(col) => (col + if place_at_end { if forwards {1} else {-1} } else {0}, 0),
+                None => (0,0)
                 }*/
             },
-            Movement::EndOfLine => (cur, (self.lines[self.cursor_line].len(), cur.1)),
-            Movement::StartOfLine => (cur, (0,cur.1)),
+            Movement::EndOfLine => (cur..(self.lines[self.cursor_line].len(), cur.1)),
+            Movement::StartOfLine => (cur..(0,cur.1)),
             /*Movement::Rep(count, movement) => {
-                let mut offset = (0,0);
-                for _ in 0..count {
-                    let (dx, dy) = self.movement_cursor_offset(*movement.clone());
-                    offset.0 += dx; offset.1 += dy;
-                }
-                (cur, (cur.0 + offset.0, cur.1 + offset.1))
-            }*/
+              let mut offset = (0,0);
+              for _ in 0..count {
+              let (dx, dy) = self.movement_cursor_offset(*movement.clone());
+              offset.0 += dx; offset.1 += dy;
+              }
+              (cur, (cur.0 + offset.0, cur.1 + offset.1))
+              }*/
             _ => panic!("unknown movement!")
         }
     }
 
     pub fn make_movement(&mut self, mv: Movement) {
-        let new_pos = self.movement_range(mv).1;
+        let new_pos = self.movement_range(mv).end;
         self.place_cursor(new_pos.0, new_pos.1);
     }
 
@@ -219,7 +240,7 @@ impl Buffer {
         // intraline characters
         println!("trying to delete movement ({:?})", mv);
         let incm = mv.inclusion_mode();
-        let (mut start, mut end) = self.movement_range(mv);
+        let ::std::ops::Range { mut start, mut end } = self.movement_range(mv);
         println!("\tfrom {:?} to {:?}", start, end);
         self.line_layouts[start.1] = None;
         for line in (start.1)..(end.1) {
