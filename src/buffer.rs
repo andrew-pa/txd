@@ -157,13 +157,13 @@ impl Buffer {
     /// the movement, in the range start <= x < end, like (start..end). The first tuple will usually be the same as the current cursor
     /// location except in cases where the movement includes an entire line, for instance. The
     /// second tuple is the end of the movement absolute.
-    pub fn movement_range(&self, mv: Movement) -> ::std::ops::Range<(usize, usize)> {
+    pub fn movement_range(&mut self, mv: &Movement) -> ::std::ops::Range<(usize, usize)> {
         fn wrapadd1(a: usize, b: bool) -> usize {
             if b { a.saturating_add(1) } else { a.saturating_sub(1) }
         }
         //println!("movement = {:?}", mv);
         let cur = self.curr_loc();
-        match mv {
+        match *mv {
             Movement::Char(right) => (cur..(wrapadd1(cur.0, right), cur.1)),
             Movement::Line(up, m) => match m {
                 Inclusion::Linewise => (cur..(cur.0, wrapadd1(cur.1, !up))),
@@ -220,20 +220,28 @@ impl Buffer {
             },
             Movement::EndOfLine => (cur..(self.lines[self.cursor_line].len(), cur.1)),
             Movement::StartOfLine => (cur..(0,cur.1)),
-            /*Movement::Rep(count, movement) => {
-              let mut offset = (0,0);
-              for _ in 0..count {
-              let (dx, dy) = self.movement_cursor_offset(*movement.clone());
-              offset.0 += dx; offset.1 += dy;
-              }
-              (cur, (cur.0 + offset.0, cur.1 + offset.1))
-              }*/
+            Movement::Rep(count, ref movement) => {
+                let mut total_range = self.movement_range(movement);
+                let cp = self.curr_loc();
+                for _ in 1..count {
+                    self.place_cursor(total_range.end.0, total_range.end.1);
+                    let r = self.movement_range(movement);
+                    if r.start.1 < total_range.start.1 || r.start.0 < total_range.start.0 {
+                        total_range.start = r.start;
+                    }
+                    if r.end.1 > total_range.end.1 || r.end.0 > total_range.end.0 {
+                        total_range.end = r.end;
+                    }
+                }
+                self.place_cursor(cp.0, cp.1);
+                total_range
+            }
             _ => panic!("unknown movement!")
         }
     }
 
     pub fn make_movement(&mut self, mv: Movement) {
-        let new_pos = self.movement_range(mv).end;
+        let new_pos = self.movement_range(&mv).end;
         self.place_cursor(new_pos.0, new_pos.1);
     }
 
@@ -246,7 +254,7 @@ impl Buffer {
         // intraline characters
         println!("trying to delete movement ({:?})", mv);
         let incm = mv.inclusion_mode();
-        let ::std::ops::Range { mut start, mut end } = self.movement_range(mv);
+        let ::std::ops::Range { mut start, mut end } = self.movement_range(&mv);
         println!("\tfrom {:?} to {:?}", start, end);
         self.line_layouts[start.1] = None;
         for line in (start.1)..(end.1) {
