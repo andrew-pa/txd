@@ -7,7 +7,7 @@
 	+ [done; many panics tho] Error messages (Result instead of Option from Mode switch?)
 	+ [done] Delete/Change in Normal mode
 		- Actually get change line to work
-	- Word movements [done, except e/b movements are very broken, largly doesn't quite land cursor where one expects]
+	- Word movements [done, now need to change to actually parsing all the words in the line into a Vec, so that e/b and commands like daw work]
 	+ [done needs configuration] Tab key working
 	+ [done; fixed in runic] Proper key repeat
 	+ [done] open previous buffer (:b#)
