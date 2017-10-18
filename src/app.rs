@@ -103,31 +103,36 @@ impl App for TxdApp {
         buf.paint(rx, Rect::xywh(4.0, 4.0, bnd.w-4.0, bnd.h-34.0));
         
         //draw status line
+        let mode_tag_tl = rx.new_text_layout(self.mode.status_tag(), &res.font, bnd.w, bnd.h).expect("create mode text layout");
+        let mtb = mode_tag_tl.bounds();
+        let status_y = bnd.h-mtb.h*2.2;
+
         rx.set_color(Color::rgb(0.25, 0.22, 0.2));
-        rx.fill_rect(Rect::xywh(0.0, bnd.h-34.0, bnd.w, 18.0));
+        rx.fill_rect(Rect::xywh(0.0, status_y-1.0, bnd.w, mtb.h));
         rx.set_color(Color::rgb(0.4, 0.6, 0.0));
-        rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), &res.font);
+        /*rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), &res.font);*/
+        rx.draw_text_layout(Point::xy(4.0, status_y), &mode_tag_tl);
         rx.set_color(Color::rgb(0.9, 0.4, 0.0));
-        rx.draw_text(Rect::xywh(100.0, bnd.h-35.0, bnd.w, 18.0),
+        rx.draw_text(Rect::xywh(100.0, status_y, bnd.w, 18.0),
                      &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
                      &res.font);
         rx.set_color(Color::rgb(0.0, 0.6, 0.4));
-        rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-35.0, bnd.w, 18.0),
+        rx.draw_text(Rect::xywh(bnd.w-200.0, status_y, bnd.w, 18.0),
                      &format!("ln {} col {}", buf.cursor_line, buf.cursor_col),
                      &res.font);
         if let Some(ref err) = self.last_err {
             rx.set_color(Color::rgb(0.9, 0.2, 0.0));
-            rx.draw_text(Rect::xywh(4.0, bnd.h-18.0, bnd.w, 18.0),
+            rx.draw_text(Rect::xywh(4.0, status_y + mtb.h, bnd.w, 18.0),
                 &format!("error: {}", err),
                 &res.font);
         }
         //draw command line
         if let Some(cmd) = self.mode.pending_command() {
             rx.set_color(Color::rgb(0.8, 0.8, 0.8));
-            rx.draw_text(Rect::xywh(bnd.w-200.0, bnd.h-18.0, bnd.w, 18.0), cmd,
+            rx.draw_text(Rect::xywh(bnd.w-200.0, status_y + mtb.h, bnd.w, 18.0), cmd,
                         &res.font);
         }
-        self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, bnd.h-18.0, bnd.w-200.0, 20.0));
+        self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, status_y + mtb.h, bnd.w-200.0, 20.0));
     }
 }
 

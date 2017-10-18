@@ -102,7 +102,7 @@ impl Buffer {
                     cursor_col = i;
                 }
             }*/
-            //while !cln.is_char_boundary(cursor_col) { println!("{}", cursor_col); cursor_col += 1; }
+            while !cln.is_char_boundary(cursor_col) { println!("{}", cursor_col); cursor_col += 1; }
         }
 
 
