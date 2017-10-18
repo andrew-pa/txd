@@ -9,6 +9,8 @@ use runic::*;
 use res::Resources;
 use movement::*;
 
+use std::str::*;
+
 #[derive(Debug)]
 pub enum TabStyle {
     Tab,
@@ -92,7 +94,15 @@ impl Buffer {
 
             let cln = &bl[cursor_line];
             if cursor_col > cln.len() { cursor_col = cln.len(); }
-            while !cln.is_char_boundary(cursor_col) { println!("{}", cursor_col); cursor_col += 1; }
+            /*let mut lowest_dist = 1000;
+            for (i,g) in &cln[..].grapheme_indices() {
+                let dist = (cursor_col - i).abs();
+                if dist < lowest_dist {
+                    lowest_dist = dist;
+                    cursor_col = i;
+                }
+            }*/
+            //while !cln.is_char_boundary(cursor_col) { println!("{}", cursor_col); cursor_col += 1; }
         }
 
 

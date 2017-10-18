@@ -23,7 +23,7 @@ impl Mode for InsertMode {
 
         match e {
             WindowEvent::ReceivedCharacter(c) => {
-                if c.is_control() { Ok(None) } else {
+                if c.is_control() || ((c as u32) >= 0xf700 && (c as u32) < 0xf7ff) { Ok(None) } else {
                     buf.insert_char(c);
                     Ok(None)
                 }
