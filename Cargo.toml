@@ -5,4 +5,4 @@ authors = ["Andrew Palmer <andrew.pa@outlook.com>"]
 
 [dependencies]
 runic = { path = "../runic" }
-winit = "0.7"
+winit = "0.8"
