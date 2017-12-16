@@ -228,7 +228,7 @@ impl Buffer {
                 }
                 v
             },
-            Movement::EndOfLine => (cur..(self.lines[self.cursor_line].len(), cur.1)),
+            Movement::EndOfLine => (cur..(self.lines[self.cursor_line].len()-1, cur.1)),
             Movement::StartOfLine => (cur..(0,cur.1)),
             Movement::Rep(count, ref movement) => {
                 let mut total_range = self.movement_range(movement);
@@ -281,6 +281,7 @@ impl Buffer {
         } else {
             for i in (start.1)..(end.1) {
                 removed.push_str(&self.lines.remove(i));
+                removed.push_str("\n");
                 self.line_layouts.remove(i);
             }
         }
@@ -293,8 +294,29 @@ impl Buffer {
         removed
     }
 
-    pub fn yank_movement(&self, mv: Movement) -> String {
-        panic!("yank");
+    pub fn yank_movement(&mut self, mv: Movement) -> String {
+        let mut selected = String::new();
+        println!("trying to yank movement ({:?})", mv);
+        let incm = mv.inclusion_mode();
+        let ::std::ops::Range { mut start, mut end } = self.movement_range(&mv);
+        println!("\tfrom {:?} to {:?}", start, end);
+        for line in (start.1)..(end.1) {
+            println!("\tline {}: {}", line, self.lines[line]);
+        }
+
+        if incm == Inclusion::Inclusive { end.0 += 1; }
+
+        if start.1 == end.1 { // all in the same line
+            selected.push_str(&self.lines[start.1][if start.0 > end.0 { (end.0)..(start.0) } else { (start.0)..(end.0) }]);
+        } else {
+            for i in (start.1)..(end.1) {
+                selected.push_str(&self.lines[i]);
+                selected.push_str("\n");
+            }
+        }
+        
+        println!("\t yanked: \"{}\"", selected);
+        selected
         /*match mv {
             Movement::WholeLine => {
                 self.lines[self.cursor_line].clone() + "\n"

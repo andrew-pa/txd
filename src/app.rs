@@ -108,7 +108,7 @@ impl App for TxdApp {
         let status_y = bnd.h-mtb.h*2.2;
 
         rx.set_color(Color::rgb(0.25, 0.22, 0.2));
-        rx.fill_rect(Rect::xywh(0.0, status_y-1.0, bnd.w, mtb.h));
+        rx.fill_rect(Rect::xywh(0.0, status_y-0.5, bnd.w, mtb.h));
         rx.set_color(Color::rgb(0.4, 0.6, 0.0));
         /*rx.draw_text(Rect::xywh(4.0, bnd.h-35.0, bnd.w, 18.0), self.mode.status_tag(), &res.font);*/
         rx.draw_text_layout(Point::xy(4.0, status_y), &mode_tag_tl);

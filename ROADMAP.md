@@ -20,11 +20,14 @@
 		- High priority because many things are blocked due to the fact that they require configuration and it's unknown how that will work
 	- Copy/Paste (Ctrl-C/Ctrl-V)
 		- add perhaps a way to index into the stack, also move between them (dup/swap?)
+		- unify stacks + buffers
 	- Undo
 		- Move Action parse/commit code into Buffer from Normal mode to support Undo
 		- Make insertion an Action that actually holds the inserted content???
 	- Paragraph movements
 	- Buffer List
+		- draw buffer list in top bar
+		- arrow keys to cycle buffers?
 	- Current Directory
 	- Mouse support
 	- Tab completion on buffer names/file system
@@ -45,10 +48,11 @@
 	- syntax where the rep count comes before the action -> 3dw instead of d3w
 	- resizing the window should change the line wrap
 	- command output, somewhere
-	- inclusive/exclusive/linewise motions like Vim
+	- [sorta done, it is janky] inclusive/exclusive/linewise motions like Vim
 	- close buffers
 	- some sort of notification system / output from commands. It'd be nice if this was together, but it might look slightly odd wrt things like listing buffers and then getting error messages
 	- markdown rendering
+	- draw line numbers/gutter
 
 - Language Server Protocol
 	- low-level client

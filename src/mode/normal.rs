@@ -101,7 +101,7 @@ impl Action {
                 Ok(Some(Box::new(InsertMode::new())))
             },
             &Action::Yank(ref mv, ref r) => {
-                let v = { app.bufs[app.current_buffer].borrow().yank_movement(mv.clone()) };
+                let v = app.mutate_buf(|b| b.yank_movement(mv.clone()));
                 app.push_clip(r, v);
                 Ok(None)
             },

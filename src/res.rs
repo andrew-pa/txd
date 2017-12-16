@@ -8,7 +8,7 @@ pub struct Resources {
 impl Resources {
     pub fn new(mut rx: &mut RenderContext) -> Result<Resources, Box<Error>> {
         Ok(Resources {
-            font: rx.new_font("Consolas", 12.0, FontWeight::Regular, FontStyle::Normal)?,
+            font: rx.new_font("Consolas", 14.0, FontWeight::Regular, FontStyle::Normal)?,
         })
     }
 }
