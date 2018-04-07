@@ -16,7 +16,7 @@
 
 
 ## things that need to be done ##
-	- Configuration stuff (colors! fonts! commands?)
+	/ Configuration stuff (colors! fonts! commands?)
 		- High priority because many things are blocked due to the fact that they require configuration and it's unknown how that will work
 	- Copy/Paste (Ctrl-C/Ctrl-V)
 		- add perhaps a way to index into the stack, also move between them (dup/swap?)

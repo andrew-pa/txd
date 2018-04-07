@@ -11,6 +11,7 @@ use mode;
 
 use winit::Event;
 
+
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub struct ClipstackId(pub char);
 
@@ -56,24 +57,50 @@ use std::path::{Path, PathBuf};
 pub struct TxdApp {
     state: State,
     last_err: Option<Box<Error>>,
-    mode: Box<mode::Mode>
+    mode: Box<mode::Mode>,
+    lsp: super::lsp::LanguageServer
 }
 
 impl TxdApp {
     pub fn init(mut rx: &mut RenderContext) -> TxdApp {
-        let res = Rc::new(RefCell::new(Resources::new(rx).expect("create resources")));
+        use std::fs::File;
+        use std::io::Read;
+        use toml::Value;
+        let (config, le) : (Option<Value>, Option<Box<Error>>) = match File::open("config.toml") {
+            Ok(mut f) => {
+                let mut config_text = String::new();
+                if let Err(e) = f.read_to_string(&mut config_text) {
+                    (None, Some(Box::new(e)))
+                } else {
+                    match config_text.parse::<Value>() {
+                        Ok(v) => (Some(v), None),
+                        Err(e) => (None, Some(Box::new(e)))
+                    } 
+                }
+            }
+            Err(e) => (None, Some(Box::new(e)))
+        };
+        if let Some(ref e) = le {
+            println!("config error {:?}", e);
+        }
+        
+        let res = Rc::new(RefCell::new(Resources::new(rx, &config).expect("create resources")));
         let buf = Rc::new(RefCell::new(
                 env::args().nth(1).map_or_else(|| Buffer::new(res.clone()),
-                                                |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
+                |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
-        println!("cd = {}, canoncd = {}", ::std::env::current_dir().unwrap().display(), ::std::env::current_dir().unwrap().canonicalize().unwrap().display());
-        TxdApp { state: State {
+        println!("cd = {}, canoncd = {}", ::std::env::current_dir().unwrap().display(),
+            ::std::env::current_dir().unwrap().canonicalize().unwrap().display());
+        TxdApp {
+            state: State {
                 bufs: vec![cmd, buf],
                 current_buffer: 1, last_buffer: 1,
                 clipstacks: HashMap::new(), res,
                 should_quit: false
-            }, mode: Box::new(mode::NormalMode::new()), last_err: None
+            },
+            mode: Box::new(mode::NormalMode::new()), last_err: le,
+            lsp: super::lsp::LanguageServer::new(config.as_ref().and_then(|x| x.get("lsp")).unwrap()).expect("create lsp")
         }
     }
 }
@@ -129,10 +156,10 @@ impl App for TxdApp {
         //draw command line
         if let Some(cmd) = self.mode.pending_command() {
             rx.set_color(Color::rgb(0.8, 0.8, 0.8));
-            rx.draw_text(Rect::xywh(bnd.w-200.0, status_y + mtb.h, bnd.w, 18.0), cmd,
+            rx.draw_text(Rect::xywh(bnd.w-200.0, status_y + mtb.h, bnd.w, 28.0), cmd,
                         &res.font);
         }
-        self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, status_y + mtb.h, bnd.w-200.0, 20.0));
+        self.state.bufs[0].borrow_mut().paint(rx, Rect::xywh(4.0, status_y + mtb.h, bnd.w-200.0, 50.0));
     }
 }
 

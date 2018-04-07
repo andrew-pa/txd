@@ -1,0 +1,7 @@
+[font]
+name = "Fira Code"
+size = 18.0
+
+[lsp]
+cmd = "rls"
+#cmd = "D:\\Apps\\GnuWin32\\bin\\cat.exe"

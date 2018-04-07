@@ -51,6 +51,7 @@ impl Buffer {
 
     pub fn load(fp: &Path, res: Rc<RefCell<Resources>>) -> Result<Buffer, IoError> {
         let fp_exists = fp.exists();
+        
         let (lns, lay, ts) = if fp_exists { 
             let mut f = OpenOptions::new().read(true).write(true).open(fp)?;
             let mut s : String = String::new();
