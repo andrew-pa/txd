@@ -104,6 +104,71 @@ pub struct LanguageServer {
     response_thread: Option<thread::JoinHandle<()>>,
 }
 
+enum ReadState {
+    Waiting,
+    Data { content_length: usize, data: String }
+}
+
+struct JsonRpcHeaderIter<'s> {
+    s: &'s str
+}
+
+fn read_headers<'s, S: AsRef<str> + 's>(s: &'s S) -> JsonRpcHeaderIter<'s> {
+    JsonRpcHeaderIter { s: s.as_ref() }
+}
+
+impl<'s> Iterator for JsonRpcHeaderIter<'s> {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<(usize, usize)> {
+       self.s.find("Content-Length: ").map(|header_start| {
+           let header_end = self.s.split_at(header_start).1.find("\r\n").unwrap() + header_start;
+           println!("t = {}", &self.s[header_start+16..header_end]);
+           self.s[header_start+16..header_end].parse::<usize>().map(|content_length| (content_length, header_end+4)).expect("parse content length")
+       })
+    }
+}
+
+impl ReadState {
+    fn advance<R: Read, F: FnMut(&str)>(self, out: &mut R, buf: &mut [u8], mut done: F) -> ReadState {
+        match self {
+            ReadState::Waiting => {
+                let n = out.read(buf).unwrap();
+                let s = String::from_utf8_lossy(&buf[0..n]);
+
+                for (content_length, header_end) in read_headers(&s) {
+                    if header_end + content_length > n {
+                        // wait for rest of data
+                        return ReadState::Data { content_length, data: String::from(s.split_at(header_end).1) };
+                    } else {
+                        done(&s[header_end..header_end+content_length]);
+                    }
+                }
+                ReadState::Waiting
+            },
+            ReadState::Data { content_length, mut data } => {
+                let n = out.read(buf).unwrap();
+                data += &String::from_utf8_lossy(&buf[0..n]);
+                
+                if data.len() >= content_length {
+                    done(&data[0..content_length]);
+                    data = data.split_off(content_length);
+                }
+
+                for (content_length, header_end) in read_headers(&data) {
+                    if header_end + content_length > data.len() {
+                        // wait for rest of data
+                        return ReadState::Data { content_length, data: String::from(data.split_at(header_end).1) };
+                    } else {
+                        done(&data[header_end..header_end+content_length]);
+                    }
+                }
+                ReadState::Waiting
+            },
+        }
+    }
+}
+
 impl LanguageServer {
     pub fn new(config: &TomlValue) -> SResult<LanguageServer, Box<Error>> {
         let mut ps = Command::new(config.get("cmd")
@@ -113,7 +178,7 @@ impl LanguageServer {
                 .stdout(Stdio::piped())
                 .spawn()?;
         let mut ins = ProcessInPipe::wrap(ps.stdin.take().unwrap());
-        let mut out = ProcessOutPipe::wrap(ps.stdout.take().unwrap());//.take().as_mut().ok_or(IOError::new(IOErrorKind::NotConnected, "language server child process output not connected")).unwrap();
+        let mut out = ProcessOutPipe::wrap(ps.stdout.take().unwrap());
         let mut ls = LanguageServer {
             ps,
             response_pool: Arc::new(Mutex::new(HashMap::new())),
@@ -127,25 +192,28 @@ impl LanguageServer {
         let mut rq = ls.request_queue.clone();
         let mut rp = ls.response_pool.clone();
         ls.response_thread = Some(thread::spawn(move || {
-            let mut buf: [u8; 512] = [0; 512];
+            let mut buf: [u8; 1024] = [0; 1024];
             let mut events = mio::Events::with_capacity(1024);
+            let mut read_state_machine = ReadState::Waiting;
             loop {
                 poll.poll(&mut events, None).unwrap();
                 for event in events.iter() {
                     match event.token() {
                         mio::Token(0) => {
-                            let n = out.read(&mut buf).unwrap();
-                            if n > 0 {
-                                println!("read {}:{:?};\n\t ->{}", n, &buf[0..n], String::from_utf8_lossy(&buf[0..n]));
-                            }
-                            //poll.reregister(&out.0, mio::Token(0), mio::Ready::readable(), mio::PollOpt::level() | mio::PollOpt::oneshot()).unwrap();
+                            read_state_machine = read_state_machine.advance(&mut out, &mut buf, |s| {
+                                println!("got: {}", s);
+                                let j = json::parse(&s).expect("parse response");
+                                if let Some(id) = j["id"].as_usize() {
+                                    rp.lock().expect("lock response pool").insert(id, j); 
+                                }
+                            });
                         }
                         mio::Token(1) => {
                             println!("cin writable!");
                             let mut resp = rq.lock().expect("lock request queue");
                             if resp.len() > 0 {
                                 let msg_s = json::stringify(resp.pop());
-                                let msg_s = format!("Content-Length: {}\r\n\r\n{}\r\n", msg_s.len(), msg_s);
+                                let msg_s = format!("Content-Length: {}\r\n\r\n{}", msg_s.len(), msg_s);
                                 println!("sending {}", msg_s);
                                 write!(&mut ins, "{}", msg_s);
                                 ins.flush().expect("flush ins");
@@ -158,7 +226,7 @@ impl LanguageServer {
         }));
         let mut req = JsonValue::new_object();
         req["processId"] = json::Null;
-        req["rootUri"] = json::Null;
+        req["rootUri"] = "file:///C:/Users/andre/Source/txd/".into();
         req["capabilities"] = JsonValue::new_object();
         ls.send("initialize", req).expect("send init");
         Ok(ls)
