@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, TryLockError, atomic::AtomicUsize, atomic::Ordering}
 use std::cell::RefCell;
 use std::thread;
 use std::io::{self, Read, Write, Error as IOError, ErrorKind as IOErrorKind};
-use std::collections::HashMap;
+use std::collections::{HashMap,VecDeque};
 use std::result::Result as SResult;
 use toml::Value as TomlValue;
 use json;
@@ -99,33 +99,42 @@ impl Future for FutureResponse {
 pub struct LanguageServer {
     ps: Child,
     response_pool: Arc<Mutex<HashMap<usize, JsonValue>>>,
-    request_queue: Arc<Mutex<Vec<JsonValue>>>,
+    request_queue: Arc<Mutex<VecDeque<JsonValue>>>,
     next_id: Arc<AtomicUsize>,
     response_thread: Option<thread::JoinHandle<()>>,
 }
 
+#[derive(Debug)]
 enum ReadState {
     Waiting,
     Data { content_length: usize, data: String }
 }
 
 struct JsonRpcHeaderIter<'s> {
-    s: &'s str
+    s: &'s str,
+    i: usize
 }
 
 fn read_headers<'s, S: AsRef<str> + 's>(s: &'s S) -> JsonRpcHeaderIter<'s> {
-    JsonRpcHeaderIter { s: s.as_ref() }
+    JsonRpcHeaderIter { s: s.as_ref(), i: 0 }
 }
 
 impl<'s> Iterator for JsonRpcHeaderIter<'s> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<(usize, usize)> {
-       self.s.find("Content-Length: ").map(|header_start| {
-           let header_end = self.s.split_at(header_start).1.find("\r\n").unwrap() + header_start;
-           println!("t = {}", &self.s[header_start+16..header_end]);
-           self.s[header_start+16..header_end].parse::<usize>().map(|content_length| (content_length, header_end+4)).expect("parse content length")
-       })
+        if self.i >= self.s.len() { return None; }
+        let s = self.s.split_at(self.i).1;
+        match s.find("Content-Length: ") {
+            Some(header_start) => {
+                let header_end = s.split_at(header_start).1.find("\r\n").unwrap() + header_start + 4;
+                //println!("t = {}", &s[header_start+16..header_end-4]);
+                let content_length = s[header_start+16..header_end-4].parse::<usize>().expect("parse content length");
+                self.i += content_length + header_end;
+                Some((content_length,self.i - content_length))
+            },
+            None => None
+        }
     }
 }
 
@@ -182,24 +191,25 @@ impl LanguageServer {
         let mut ls = LanguageServer {
             ps,
             response_pool: Arc::new(Mutex::new(HashMap::new())),
-            request_queue: Arc::new(Mutex::new(Vec::new())),
+            request_queue: Arc::new(Mutex::new(VecDeque::new())),
             next_id: Arc::new(AtomicUsize::new(1)),
             response_thread: None
         };
         let poll = mio::Poll::new().unwrap();
         poll.register(&out.0, mio::Token(0), mio::Ready::readable(), mio::PollOpt::edge()/* | mio::PollOpt::oneshot()*/).unwrap();
-        poll.register(&ins.0, mio::Token(1), mio::Ready::writable(), mio::PollOpt::edge()).unwrap();
-        let mut rq = ls.request_queue.clone();
-        let mut rp = ls.response_pool.clone();
+        poll.register(&ins.0, mio::Token(1), mio::Ready::writable(), mio::PollOpt::level()).unwrap();
+        let rq = ls.request_queue.clone();
+        let rp = ls.response_pool.clone();
         ls.response_thread = Some(thread::spawn(move || {
             let mut buf: [u8; 1024] = [0; 1024];
             let mut events = mio::Events::with_capacity(1024);
             let mut read_state_machine = ReadState::Waiting;
-            loop {
+            'main: loop {
                 poll.poll(&mut events, None).unwrap();
                 for event in events.iter() {
                     match event.token() {
                         mio::Token(0) => {
+                            //println!("rsm = {:?}", read_state_machine);
                             read_state_machine = read_state_machine.advance(&mut out, &mut buf, |s| {
                                 println!("got: {}", s);
                                 let j = json::parse(&s).expect("parse response");
@@ -209,14 +219,19 @@ impl LanguageServer {
                             });
                         }
                         mio::Token(1) => {
-                            println!("cin writable!");
+                            //println!("cin writable!");
                             let mut resp = rq.lock().expect("lock request queue");
-                            if resp.len() > 0 {
-                                let msg_s = json::stringify(resp.pop());
+                            if let Some(msg) = resp.pop_front() {
+                                let exiting = msg.has_key("method") && msg["method"] == "exit";
+                                let msg_s = json::stringify(msg);
                                 let msg_s = format!("Content-Length: {}\r\n\r\n{}", msg_s.len(), msg_s);
                                 println!("sending {}", msg_s);
                                 write!(&mut ins, "{}", msg_s);
                                 ins.flush().expect("flush ins");
+                                if exiting {
+                                    println!("exiting!");
+                                    break 'main;
+                                }
                             }
                         }
                         _ => unreachable!()
@@ -229,6 +244,10 @@ impl LanguageServer {
         req["rootUri"] = "file:///C:/Users/andre/Source/txd/".into();
         req["capabilities"] = JsonValue::new_object();
         ls.send("initialize", req).expect("send init");
+
+        let mut req = JsonValue::new_object();
+        req["query"] = "Buffer".into();
+        ls.send("workspace/symbol", req).expect("send symbol req");
         Ok(ls)
     }
 
@@ -240,7 +259,7 @@ impl LanguageServer {
         msg["method"] = method.as_ref().into();
         msg["params"] = params;
 
-        self.request_queue.lock().expect("lock queue").push(msg);
+        self.request_queue.lock().expect("lock queue").push_back(msg);
 
         Ok(FutureResponse {
             id, response_pool: self.response_pool.clone()
@@ -250,8 +269,12 @@ impl LanguageServer {
 
 impl Drop for LanguageServer {
     fn drop(&mut self) {
+        println!("drop lsp");
+        self.send("shutdown", json::Null).expect("send shutdown");
+        self.send("exit", json::Null).expect("send exit");
         if let Some(t) = self.response_thread.take() {
             t.join().expect("join response thread");
         }
+        self.ps.wait().expect("server terminates"); // some sort of error if not sucessful?
     }
 }
