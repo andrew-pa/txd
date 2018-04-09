@@ -13,6 +13,7 @@
 	+ [done] open previous buffer (:b#)
 	+ [done] Fix viewport wrt insertion
 	+ [done] y/p/P commands + clipstacks
+	+ [done] Current Directory
 
 
 ## things that need to be done ##
@@ -28,7 +29,6 @@
 	- Buffer List
 		- draw buffer list in top bar
 		- arrow keys to cycle buffers?
-	- Current Directory
 	- Mouse support
 	- Tab completion on buffer names/file system
 	- don't reload already open files into a new buffer
@@ -54,8 +54,8 @@
 	- markdown rendering
 	- draw line numbers/gutter
 
-- Language Server Protocol
-	- low-level client
+- [wip] Language Server Protocol
+	+ low-level client
 	- callbacks/tie-ins
 	- syntax highlighting!
 	- ensure it works/can be configured right with several different servers

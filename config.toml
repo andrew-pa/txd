@@ -4,5 +4,6 @@ size = 18.0
 
 [[language-server]]
 file-extention = "rs"
+language-id = "rust"
 cmd = "rls"
 #cmd = "D:\\Apps\\GnuWin32\\bin\\cat.exe"

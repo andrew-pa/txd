@@ -164,7 +164,8 @@ impl App for TxdApp {
         rx.draw_text_layout(Point::xy(4.0, status_y), &mode_tag_tl);
         rx.set_color(Color::rgb(0.9, 0.4, 0.0));
         rx.draw_text(Rect::xywh(100.0, status_y, bnd.w, 18.0),
-                     &buf.fs_loc.as_ref().map_or(String::from(""), |p| format!("{}", p.display())),
+                     &buf.fs_loc.as_ref().map_or_else(|| String::from("[new file]"),
+                        |p| format!("{}", p.strip_prefix(::std::env::current_dir().unwrap().as_path()).unwrap_or(p).display()) ),
                      &res.font);
         rx.set_color(Color::rgb(0.0, 0.6, 0.4));
         rx.draw_text(Rect::xywh(bnd.w-200.0, status_y, bnd.w, 18.0),

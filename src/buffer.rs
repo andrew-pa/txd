@@ -18,13 +18,6 @@ pub enum TabStyle {
     Spaces(usize)
 }
 
-
-#[derive(Debug)]
-pub enum Yank {
-    Span(String), // a span of characters that are intra-line
-    Lines(Vec<String>) // one or more lines of text
-}
-
 pub struct Buffer {
     pub fs_loc: Option<PathBuf>,
     pub lines: Vec<String>,
@@ -53,10 +46,15 @@ impl Buffer {
     }
 
     pub fn load(fp: &Path, app: &mut State) -> Result<Buffer, Box<Error>> {
-        let fp_exists = fp.exists();
+        let mut path = if fp.is_relative() {
+            let mut cd = ::std::env::current_dir()?;
+            cd.push(fp);
+            cd
+        } else { PathBuf::from(fp) };
+        let fp_exists = path.exists();
         
         let (lns, lay, ts) = if fp_exists { 
-            let mut f = OpenOptions::new().read(true).write(true).open(fp)?;
+            let mut f = OpenOptions::new().read(true).write(true).open(&path)?;
             let mut s : String = String::new();
             f.read_to_string(&mut s)?;
             let lns: Vec<String> = s.lines().map(String::from).collect();
@@ -82,8 +80,8 @@ impl Buffer {
         } else {
             (vec![String::from("")], vec![None], /* should be config just like ::new */ TabStyle::Tab)
         };
-        let mut buf = Buffer {
-            fs_loc: Some(PathBuf::from(fp)),
+        let buf = Buffer {
+            fs_loc: Some(path),
             lines: lns, line_layouts: lay,
             viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true,
             res: app.res.clone(),
@@ -93,6 +91,9 @@ impl Buffer {
                 None => None
             }
         };
+        if let Some(ref ls) = buf.lang_server {
+            ls.borrow_mut().document_did_open(&buf);
+        }
         Ok(buf)
     }
 
@@ -100,7 +101,7 @@ impl Buffer {
         let bl = &self.lines;
         if bl.len() == 0 { cursor_line = 0; }
         else {
-            if cursor_line >= bl.len() { cursor_line = (bl.len()-1); } 
+            if cursor_line >= bl.len() { cursor_line = bl.len()-1; } 
 
             let cln = &bl[cursor_line];
             if cursor_col > cln.len() { cursor_col = cln.len(); }
@@ -144,13 +145,13 @@ impl Buffer {
     // scan from cursor looking for character. possibly absurdly made and could be done better with
     // a better buffer representation
     pub fn scan_line<P: Fn(char)->bool>(&self, pred: P, forwards: bool) -> Option<usize> {
-        let mut line_chars = self.lines[self.cursor_line].char_indices();
+        let line_chars = self.lines[self.cursor_line].char_indices();
         (if forwards {
             println!("fwd");
             for (i, c) in line_chars {
                 if i < self.cursor_col { continue }
                 println!("{:?}", (i,c));
-                if(pred(c)) { return Some(i); }
+                if pred(c) { return Some(i); }
             }
             None //line_chars.take(self.cursor_col).inspect(|&v| print!("{:?}", v)).find(|&(_, c)| pred(c)).map(|(i, _)| i)
         } else {
@@ -158,7 +159,7 @@ impl Buffer {
             for (i, c) in line_chars.rev() {
                 if i > self.cursor_col { continue }
                 println!("{:?}", (i,c));
-                if(pred(c)) { return Some(i); }
+                if pred(c) { return Some(i); }
             }
             None
             //line_chars.skip(self.cursor_col).inspect(|&v| print!("{:?}", v)).find(|&(_, c)| pred(c)).map(|(i, _)| i)
@@ -203,14 +204,13 @@ impl Buffer {
                  *                           if whitespace than move one past that
                  * if we're on non-alphanum => move until we hit alphanum
                 */
-                let mut v = (cur..cur);
+                let mut v = cur..cur;
                 'main: while v.end.1 < self.lines.len() {
                     let mut chars: Box<Iterator<Item = (usize, char)>> = if direction {
                         Box::new(self.lines[v.end.1].char_indices().skip(v.end.0)) 
                     } else {
                         Box::new(self.lines[v.end.1].char_indices().rev().skip(self.lines[v.end.1].len()-v.end.0))
                     };
-                    let mut j = 0;
                     match chars.next() {
                         Some((i ,c)) => {
                             if char::is_alphanumeric(c) {
@@ -484,5 +484,9 @@ impl Buffer {
     }
 
     pub fn move_cursor_to_mouse(&mut self, p: Point) {
+    }
+
+    pub fn full_text(&self) -> String {
+        self.lines.iter().fold(String::new(), |a,i| a+i+"\n")
     }
 }

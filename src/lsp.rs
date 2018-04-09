@@ -18,6 +18,8 @@ use futures::prelude::*;
 use mio;
 use mio_named_pipes::NamedPipe;
 
+use buffer;
+
 #[cfg(target_os="windows")]
 struct ProcessInPipe(NamedPipe);
 #[cfg(target_os="windows")]
@@ -102,6 +104,7 @@ pub struct LanguageServer {
     request_queue: Arc<Mutex<VecDeque<JsonValue>>>,
     next_id: Arc<AtomicUsize>,
     response_thread: Option<thread::JoinHandle<()>>,
+    lang_id: String
 }
 
 #[derive(Debug)]
@@ -193,7 +196,9 @@ impl LanguageServer {
             response_pool: Arc::new(Mutex::new(HashMap::new())),
             request_queue: Arc::new(Mutex::new(VecDeque::new())),
             next_id: Arc::new(AtomicUsize::new(1)),
-            response_thread: None
+            response_thread: None,
+            lang_id: config.get("language-id").ok_or(ConfigError::Missing("language server id"))?.as_str()
+                .ok_or(ConfigError::Invalid("language server id"))?.into()
         };
         let poll = mio::Poll::new().unwrap();
         poll.register(&out.0, mio::Token(0), mio::Ready::readable(), mio::PollOpt::edge()/* | mio::PollOpt::oneshot()*/).unwrap();
@@ -261,11 +266,21 @@ impl LanguageServer {
             id, response_pool: self.response_pool.clone()
         })
     }
+
+    pub fn document_did_open(&mut self, buf: &buffer::Buffer) {
+        let mut doc = JsonValue::new_object();
+        doc["uri"] = String::from(buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap()).into();
+        doc["languageId"] = self.lang_id.clone().into();
+        doc["version"] = 0.into();
+        doc["text"] = buf.full_text().into();
+        let mut msg = JsonValue::new_object();
+        msg["textDocument"] = doc;
+        self.send("textDocument/didOpen", msg).unwrap();
+    }
 }
 
 impl Drop for LanguageServer {
     fn drop(&mut self) {
-        println!("drop lsp");
         self.send("shutdown", json::Null).expect("send shutdown");
         self.send("exit", json::Null).expect("send exit");
         if let Some(t) = self.response_thread.take() {
