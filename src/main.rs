@@ -7,6 +7,9 @@ extern crate futures;
 extern crate toml;
 extern crate json;
 extern crate mio;
+extern crate regex;
+
+#[cfg(target_os="windows")]
 extern crate mio_named_pipes;
 
 // txd: a text editor🖳

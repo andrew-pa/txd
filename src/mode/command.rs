@@ -58,8 +58,9 @@ impl CommandMode {
                 Ok(Some(Box::new(NormalMode::new())))
             },
             "e" => {
-                app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(
-                                    cmd.next().ok_or(Box::new(CommandError::InvalidCommand(Some("missing path"))))?.trim()), app.res.clone())?)));
+                let buf = Rc::new(RefCell::new(Buffer::load(Path::new(
+                                    cmd.next().ok_or(Box::new(CommandError::InvalidCommand(Some("missing path"))))?.trim()), app)?));
+                app.bufs.push(buf);
                 let ix = app.bufs.len()-1;
                 app.move_to_buffer(ix);
                 Ok(Some(Box::new(NormalMode::new())))
@@ -79,7 +80,8 @@ impl CommandMode {
                 match first_word.chars().next() {
                     Some('e') => {
                         let (e, path) = first_word.split_at(1);
-                        app.bufs.push(Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app.res.clone())?)));
+                        let buf = Rc::new(RefCell::new(Buffer::load(Path::new(path.trim()), app)?));
+                        app.bufs.push(buf);
                         let ix = app.bufs.len()-1;
                         app.move_to_buffer(ix);
                         Ok(Some(Box::new(NormalMode::new())))

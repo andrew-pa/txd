@@ -10,4 +10,8 @@ toml = "0.4"
 json = "0.11"
 futures = "0.1"
 mio = "0.6"
+regex = "0.2"
+
+[target.'cfg(windows)'.dependencies]
 mio-named-pipes = "0.1"
+

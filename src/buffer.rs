@@ -3,13 +3,14 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::fs::*;
 use std::io::{Read, Write, Error as IoError, ErrorKind};
-use std::cmp::min;
+use std::error::Error;
 
 use runic::*;
 use res::Resources;
 use movement::*;
+use app::State;
+use lsp::LanguageServer;
 
-use std::str::*;
 
 #[derive(Debug)]
 pub enum TabStyle {
@@ -38,6 +39,7 @@ pub struct Buffer {
     pub show_cursor: bool,
 
     pub tab_style: TabStyle,
+    pub lang_server: Option<Rc<RefCell<LanguageServer>>>
 }
 
 impl Buffer {
@@ -45,11 +47,12 @@ impl Buffer {
         Buffer {
             fs_loc: None, lines: vec![String::from("")],
             res, cursor_line: 0, cursor_col: 0, viewport_start: 0, viewport_end: 0,
-            line_layouts: vec![None], show_cursor: true, tab_style: /* should be config */ TabStyle::Tab
+            line_layouts: vec![None], show_cursor: true, tab_style: /* should be config */ TabStyle::Tab,
+            lang_server: None
         }
     }
 
-    pub fn load(fp: &Path, res: Rc<RefCell<Resources>>) -> Result<Buffer, IoError> {
+    pub fn load(fp: &Path, app: &mut State) -> Result<Buffer, Box<Error>> {
         let fp_exists = fp.exists();
         
         let (lns, lay, ts) = if fp_exists { 
@@ -81,8 +84,14 @@ impl Buffer {
         };
         let mut buf = Buffer {
             fs_loc: Some(PathBuf::from(fp)),
-            lines: lns, line_layouts: lay, viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true, res,
-            tab_style: ts
+            lines: lns, line_layouts: lay,
+            viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true,
+            res: app.res.clone(),
+            tab_style: ts,
+            lang_server: match fp.extension().and_then(|ext| ext.to_str()) {
+                Some(ext) => app.language_server_for_file_type(ext)?,
+                None => None
+            }
         };
         Ok(buf)
     }

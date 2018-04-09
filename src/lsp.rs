@@ -57,7 +57,7 @@ impl Write for ProcessInPipe {
 }
 
 #[derive(Debug)]
-enum FutureResponseError {
+pub enum FutureResponseError {
     LockPoisoned
 }
 
@@ -76,7 +76,7 @@ impl Display for FutureResponseError {
     }
 }
 
-struct FutureResponse {
+pub struct FutureResponse {
     id: usize,
     response_pool: Arc<Mutex<HashMap<usize, JsonValue>>>
 }
@@ -241,13 +241,9 @@ impl LanguageServer {
         }));
         let mut req = JsonValue::new_object();
         req["processId"] = json::Null;
-        req["rootUri"] = "file:///C:/Users/andre/Source/txd/".into();
+        req["rootUri"] = (String::from("file:///") + ::std::env::current_dir().unwrap().to_str().unwrap()).into();
         req["capabilities"] = JsonValue::new_object();
         ls.send("initialize", req).expect("send init");
-
-        let mut req = JsonValue::new_object();
-        req["query"] = "Buffer".into();
-        ls.send("workspace/symbol", req).expect("send symbol req");
         Ok(ls)
     }
 

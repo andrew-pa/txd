@@ -2,6 +2,7 @@
 name = "Fira Code"
 size = 18.0
 
-[lsp]
+[[language-server]]
+file-extention = "rs"
 cmd = "rls"
 #cmd = "D:\\Apps\\GnuWin32\\bin\\cat.exe"

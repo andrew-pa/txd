@@ -7,9 +7,13 @@ use std::collections::HashMap;
 
 use buffer::Buffer;
 use res::Resources;
+use lsp::LanguageServer;
 use mode;
 
 use winit::Event;
+use regex::Regex;
+
+use super::ConfigError;
 
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
@@ -21,7 +25,8 @@ pub struct State {
     pub last_buffer: usize,
     pub current_buffer: usize,
     pub clipstacks: HashMap<ClipstackId, Vec<String>>,
-    pub should_quit: bool
+    pub should_quit: bool,
+    pub language_servers: Vec<(Regex, Rc<RefCell<LanguageServer>>)>
 }
 
 impl State {
@@ -50,6 +55,25 @@ impl State {
         self.last_buffer = self.current_buffer;
         self.current_buffer = ix;
     }
+    
+    pub fn language_server_for_file_type(&mut self, file_ext: &str) -> Result<Option<Rc<RefCell<LanguageServer>>>, Box<Error>> {
+        for (ref test, ref lsp) in self.language_servers.iter() {
+            if test.is_match(file_ext) {
+                return Ok(Some(lsp.clone()));
+            }
+        }
+        if let Some(cfgs) = self.res.borrow().config.as_ref().and_then(|c| c.get("language-server")).and_then(|c| c.as_array()) {
+            for cfg in cfgs {
+                let test = Regex::new(cfg.get("file-extention").ok_or(ConfigError::Missing("language server file extention regex"))?.as_str().ok_or(ConfigError::Invalid("language server file extention regex"))?)?;
+                if test.is_match(file_ext) {
+                    let lsp = Rc::new(RefCell::new(LanguageServer::new(&cfg)?));
+                    self.language_servers.push((test, lsp.clone()));
+                    return Ok(Some(lsp.clone()));
+                }
+            }
+        }
+        Ok(None)
+    }
 }
 
 use std::path::{Path, PathBuf};
@@ -58,7 +82,6 @@ pub struct TxdApp {
     state: State,
     last_err: Option<Box<Error>>,
     mode: Box<mode::Mode>,
-    lsp: super::lsp::LanguageServer
 }
 
 impl TxdApp {
@@ -84,23 +107,23 @@ impl TxdApp {
             println!("config error {:?}", e);
         }
         
-        let res = Rc::new(RefCell::new(Resources::new(rx, &config).expect("create resources")));
-        let buf = Rc::new(RefCell::new(
-                env::args().nth(1).map_or_else(|| Buffer::new(res.clone()),
-                |p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
+        let res = Rc::new(RefCell::new(Resources::new(rx, config).expect("create resources")));
+        let buf = Rc::new(RefCell::new(Buffer::new(res.clone())));
+                //env::args().nth(1).map_or_else(|| Buffer::new(res.clone()),
+                //|p| Buffer::load(Path::new(&p), res.clone()).expect("open file"))  ));
         let cmd = Rc::new(RefCell::new(Buffer::new(res.clone())));
         { cmd.borrow_mut().show_cursor = false; }
-        println!("cd = {}, canoncd = {}", ::std::env::current_dir().unwrap().display(),
-            ::std::env::current_dir().unwrap().canonicalize().unwrap().display());
+        //println!("cd = {}, canoncd = {}", ::std::env::current_dir().unwrap().display(),
+        //    ::std::env::current_dir().unwrap().canonicalize().unwrap().display());
         TxdApp {
             state: State {
                 bufs: vec![cmd, buf],
                 current_buffer: 1, last_buffer: 1,
                 clipstacks: HashMap::new(), res,
-                should_quit: false
+                should_quit: false,
+                language_servers: Vec::new()
             },
             mode: Box::new(mode::NormalMode::new()), last_err: le,
-            lsp: super::lsp::LanguageServer::new(config.as_ref().and_then(|x| x.get("lsp")).unwrap()).expect("create lsp")
         }
     }
 }
