@@ -244,11 +244,11 @@ impl LanguageServer {
                 }
             }
         }));
-        let mut req = JsonValue::new_object();
-        req["processId"] = json::Null;
-        req["rootUri"] = (String::from("file:///") + ::std::env::current_dir().unwrap().to_str().unwrap()).into();
-        req["capabilities"] = JsonValue::new_object();
-        ls.send("initialize", req).expect("send init");
+        ls.send("initialize", object!{
+            "processId" => json::Null,
+            "rootUri" => (String::from("file:///") + ::std::env::current_dir().unwrap().to_str().unwrap()),
+            "capabilities" => object!{}
+        }).expect("send init");
         Ok(ls)
     }
 
@@ -268,14 +268,33 @@ impl LanguageServer {
     }
 
     pub fn document_did_open(&mut self, buf: &buffer::Buffer) {
-        let mut doc = JsonValue::new_object();
-        doc["uri"] = String::from(buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap()).into();
-        doc["languageId"] = self.lang_id.clone().into();
-        doc["version"] = 0.into();
-        doc["text"] = buf.full_text().into();
-        let mut msg = JsonValue::new_object();
-        msg["textDocument"] = doc;
-        self.send("textDocument/didOpen", msg).unwrap();
+        let lang_id = self.lang_id.clone();
+        self.send("textDocument/didOpen", object!{
+            "textDocument" => object!{
+                "uri" => String::from(buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap()),
+                "languageId" => lang_id,
+                "version" => buf.version,
+                "text" => buf.full_text(),
+            }
+        }).unwrap();
+    }
+
+    pub fn document_did_change(&mut self, buf: &mut buffer::Buffer, changes: Vec<((usize,usize), (usize,usize), usize, &str)>) {
+        buf.version += 1;
+        self.send("textDocument/didChange", object!{
+            "textDocument" => object!{
+                "uri" => String::from(buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap()),
+                "version" => buf.version
+            },
+            "contentChanges" => changes.iter().map(|&(start, end, len, text)| object! {
+                "range" => object!{
+                    "start" => object!{ "line" => start.0, "character" => start.1 },
+                    "end"   => object!{ "line" => end.0,   "character" => end.1 },
+                },
+                "rangeLength" => len,
+                "text" => text,
+            }).collect::<Vec<_>>()
+        }).unwrap();
     }
 }
 

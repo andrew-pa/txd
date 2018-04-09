@@ -32,7 +32,8 @@ pub struct Buffer {
     pub show_cursor: bool,
 
     pub tab_style: TabStyle,
-    pub lang_server: Option<Rc<RefCell<LanguageServer>>>
+    pub lang_server: Option<Rc<RefCell<LanguageServer>>>,
+    pub version: usize,
 }
 
 impl Buffer {
@@ -41,7 +42,7 @@ impl Buffer {
             fs_loc: None, lines: vec![String::from("")],
             res, cursor_line: 0, cursor_col: 0, viewport_start: 0, viewport_end: 0,
             line_layouts: vec![None], show_cursor: true, tab_style: /* should be config */ TabStyle::Tab,
-            lang_server: None
+            lang_server: None, version: 0
         }
     }
 
@@ -89,7 +90,8 @@ impl Buffer {
             lang_server: match fp.extension().and_then(|ext| ext.to_str()) {
                 Some(ext) => app.language_server_for_file_type(ext)?,
                 None => None
-            }
+            },
+            version: 0
         };
         if let Some(ref ls) = buf.lang_server {
             ls.borrow_mut().document_did_open(&buf);
@@ -443,7 +445,7 @@ impl Buffer {
         }
     }
 
-    pub fn paint(&mut self, mut rx: &mut RenderContext, bnd: Rect) {
+    pub fn paint(&mut self, rx: &mut RenderContext, bnd: Rect) {
         //draw text
         let mut p = Point::xy(bnd.x, bnd.y);
         let mut line = self.viewport_start;

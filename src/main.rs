@@ -5,6 +5,7 @@ extern crate runic;
 extern crate winit;
 extern crate futures;
 extern crate toml;
+#[macro_use]
 extern crate json;
 extern crate mio;
 extern crate regex;
