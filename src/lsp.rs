@@ -16,6 +16,7 @@ use futures;
 use futures::prelude::*;
 
 use mio;
+#[cfg(target_os="windows")]
 use mio_named_pipes::NamedPipe;
 
 use buffer;
@@ -25,19 +26,88 @@ struct ProcessInPipe(NamedPipe);
 #[cfg(target_os="windows")]
 struct ProcessOutPipe(NamedPipe);
 
+pub struct Fd<T>(T);
+
+impl<T: Read> Read for Fd<T> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.0.read(bytes)
+    }
+}
+
+impl<T: Write> Write for Fd<T> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl<T> mio::Evented for Fd<T> where T: ::std::os::unix::prelude::AsRawFd {
+    fn register(&self,
+                poll: &mio::Poll,
+                token: mio::Token,
+                interest: mio::Ready,
+                opts: mio::PollOpt)
+                -> io::Result<()> {
+        mio::unix::EventedFd(&self.0.as_raw_fd()).register(poll,
+                                                token,
+                                                interest | mio::Ready::hup(),
+                                                opts)
+    }
+
+    fn reregister(&self,
+                  poll: &mio::Poll,
+                  token: mio::Token,
+                  interest: mio::Ready,
+                  opts: mio::PollOpt)
+                  -> io::Result<()> {
+        mio::unix::EventedFd(&self.0.as_raw_fd()).reregister(poll,
+                                                  token,
+                                                  interest | mio::Ready::hup(),
+                                                  opts)
+    }
+
+    fn deregister(&self, poll: &mio::Poll) -> io::Result<()> {
+        mio::unix::EventedFd(&self.0.as_raw_fd()).deregister(poll)
+    }
+}
+
+#[cfg(any(target_os="macos", target_os="linux"))]
+struct ProcessInPipe(Fd<ChildStdin>);
+#[cfg(any(target_os="macos", target_os="linux"))]
+struct ProcessOutPipe(Fd<ChildStdout>);
+
 impl ProcessInPipe {
     fn wrap(ins: ChildStdin) -> ProcessInPipe {
-        use std::os::windows::io::*;
-        unsafe {
-            ProcessInPipe(NamedPipe::from_raw_handle(ins.into_raw_handle()))
+        #[cfg(target_os="windows")]
+        {
+            use std::os::windows::io::*;
+            unsafe {
+                ProcessInPipe(NamedPipe::from_raw_handle(ins.into_raw_handle()))
+            }
+        }
+        #[cfg(any(target_os="macos", target_os="linux"))]
+        {
+            use std::os::unix::io::*;
+            unsafe { ProcessInPipe(Fd(ins)) }
         }
     }
 }
 impl ProcessOutPipe {
     fn wrap(out: ChildStdout) -> ProcessOutPipe {
-        use std::os::windows::io::*;
-        unsafe {
-            ProcessOutPipe(NamedPipe::from_raw_handle(out.into_raw_handle()))
+        #[cfg(target_os="windows")]
+        {
+            use std::os::windows::io::*;
+            unsafe {
+                ProcessOutPipe(NamedPipe::from_raw_handle(out.into_raw_handle()))
+            }
+        }
+        #[cfg(any(target_os="macos", target_os="linux"))]
+        {
+            use std::os::unix::io::*;
+            unsafe { ProcessOutPipe(Fd(out)) }
         }
     }
 }
@@ -271,7 +341,7 @@ impl LanguageServer {
         let lang_id = self.lang_id.clone();
         self.send("textDocument/didOpen", object!{
             "textDocument" => object!{
-                "uri" => String::from(buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap()),
+                "uri" => String::from("file:///") + buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap(),
                 "languageId" => lang_id,
                 "version" => buf.version,
                 "text" => buf.full_text(),
@@ -283,7 +353,7 @@ impl LanguageServer {
         buf.version += 1;
         self.send("textDocument/didChange", object!{
             "textDocument" => object!{
-                "uri" => String::from(buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap()),
+                "uri" => String::from("file:///") + buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap(),
                 "version" => buf.version
             },
             "contentChanges" => changes.iter().map(|&(start, end, len, text)| object! {
