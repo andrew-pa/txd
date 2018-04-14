@@ -44,6 +44,7 @@ impl<T: Write> Write for Fd<T> {
     }
 }
 
+#[cfg(any(target_op="macos", target_os="linux"))]
 impl<T> mio::Evented for Fd<T> where T: ::std::os::unix::prelude::AsRawFd {
     fn register(&self,
                 poll: &mio::Poll,
@@ -153,17 +154,34 @@ pub struct FutureResponse {
     response_pool: Arc<Mutex<HashMap<usize, JsonValue>>>
 }
 
+impl FutureResponse {
+    fn wait(self) -> SResult<JsonValue, FutureResponseError> {
+        loop {
+            match self.response_pool.try_lock() {
+                Ok(ref mut rp) => {
+                    match rp.remove(&self.id) {
+                        Some(r) => return Ok(r),
+                        None => {}
+                    }
+                },
+                Err(TryLockError::Poisoned(_)) => return Err(FutureResponseError::LockPoisoned),
+                Err(TryLockError::WouldBlock) => {}
+            }
+        }
+    }
+}
+
 impl Future for FutureResponse {
     type Item = JsonValue;
     type Error = FutureResponseError;
 
-    fn poll(&mut self) -> SResult<Async<JsonValue>, FutureResponseError> {
+    fn poll(&mut self, _: &mut futures::task::Context) -> SResult<Async<JsonValue>, FutureResponseError> {
         match self.response_pool.try_lock() {
             Ok(ref mut rp) => {
-                rp.remove(&self.id).map_or_else(|| Ok(Async::NotReady), |r| Ok(Async::Ready(r))) 
+                rp.remove(&self.id).map_or_else(|| Ok(Async::Pending), |r| Ok(Async::Ready(r))) 
             },
             Err(TryLockError::Poisoned(_)) => Err(FutureResponseError::LockPoisoned),
-            Err(TryLockError::WouldBlock) => Ok(Async::NotReady)
+            Err(TryLockError::WouldBlock) => Ok(Async::Pending)
         }
     }
 }
@@ -314,15 +332,28 @@ impl LanguageServer {
                 }
             }
         }));
-        ls.send("initialize", object!{
+        let init_response = ls.send("initialize", object!{
             "processId" => json::Null,
             "rootUri" => (String::from("file:///") + ::std::env::current_dir().unwrap().to_str().unwrap()),
-            "capabilities" => object!{}
-        }).expect("send init");
+            "capabilities" => object!{
+                "workspace" => object!{
+                    "workspaceFolders" => false,
+                },
+                "textDocument" => object!{
+                    "synchronization" => object!{
+                        "didSave" => true
+                    },
+                    "documentSymbol" => object!{
+                        "dynamicRegistration" => true
+                    }
+                }
+            }
+        }).expect("send init").wait().expect("response from init");
+        
         Ok(ls)
     }
 
-    fn send<S: AsRef<str>>(&mut self, method: S, params: JsonValue) -> SResult<FutureResponse, Box<Error>> {
+    pub fn send<S: AsRef<str>>(&mut self, method: S, params: JsonValue) -> SResult<FutureResponse, Box<Error>> {
         let mut msg = JsonValue::new_object();
         msg["jsonrpc"] = ("2.0").into();
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
@@ -366,6 +397,23 @@ impl LanguageServer {
             }).collect::<Vec<_>>()
         }).unwrap();
     }
+
+    pub fn document_did_save(&mut self, buf: &buffer::Buffer) {
+        self.send("textDocument/didSave", object!{
+            "textDocument" => object!{
+                "uri" => String::from("file:///") + buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap(),
+            },
+        }).unwrap();
+    }
+
+    pub fn document_did_close(&mut self, buf: &buffer::Buffer) {
+        self.send("textDocument/didClose", object!{
+            "textDocument" => object!{
+                "uri" => String::from("file:///") + buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap(),
+            },
+        }).unwrap();
+    }
+
 }
 
 impl Drop for LanguageServer {
