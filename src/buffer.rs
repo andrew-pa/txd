@@ -10,6 +10,7 @@ use res::Resources;
 use movement::*;
 use app::State;
 use lsp::LanguageServer;
+use toml;
 
 
 #[derive(Debug)]
@@ -32,16 +33,27 @@ pub struct Buffer {
     pub show_cursor: bool,
 
     pub tab_style: TabStyle,
+    pub tab_width: usize,
     pub lang_server: Option<Rc<RefCell<LanguageServer>>>,
     pub version: usize,
 }
 
 impl Buffer {
     pub fn new(res: Rc<RefCell<Resources>>) -> Buffer {
+
+        let (default_indent_style, default_indent_width) = res.borrow().config.as_ref().and_then(|c| c.get("indent"))
+                    .map(|c| (c.get("default-style"), c.get("width"))).and_then(|v| {
+                        match (v.0.and_then(toml::Value::as_str), v.1.and_then(toml::Value::as_integer)) {
+                            (Some("tabs"), Some(w)) => Some((TabStyle::Tab, w as usize)),
+                            (Some("spaces"), Some(w)) => Some((TabStyle::Spaces(w as usize), w as usize)),
+                             _ => None
+                        }
+                    }).unwrap_or((TabStyle::Tab,4));
+
         Buffer {
             fs_loc: None, lines: vec![String::from("")],
             res, cursor_line: 0, cursor_col: 0, viewport_start: 0, viewport_end: 0,
-            line_layouts: vec![None], show_cursor: true, tab_style: /* should be config */ TabStyle::Tab,
+            line_layouts: vec![None], show_cursor: true, tab_style: default_indent_style, tab_width: default_indent_width,
             lang_server: None, version: 0
         }
     }
@@ -53,6 +65,16 @@ impl Buffer {
             cd
         } else { PathBuf::from(fp) };
         let fp_exists = path.exists();
+
+        let (default_indent_style, default_indent_width) = app.res.borrow().config.as_ref().and_then(|c| c.get("indent"))
+                    .map(|c| (c.get("default-style"), c.get("width"))).map(|v| {
+                        match (v.0.and_then(toml::Value::as_str), v.1.and_then(toml::Value::as_integer)) {
+                            (Some("tabs"), Some(w)) => Ok((TabStyle::Tab, w as usize)),
+                            (Some("spaces"), Some(w)) => Ok((TabStyle::Spaces(w as usize), w as usize)),
+                             _ => Err(super::ConfigError::Invalid("default indent style"))
+                        }
+                    }).unwrap_or(Ok((TabStyle::Tab,4)))?;
+
         
         let (lns, lay, ts) = if fp_exists { 
             let mut f = OpenOptions::new().read(true).write(true).open(&path)?;
@@ -77,16 +99,16 @@ impl Buffer {
                 layouts.push(None);
             }
             //println!("detected tab style = {:?}", ts);
-            (lns, layouts, ts.unwrap_or(TabStyle::Tab /* config details */))
+            (lns, layouts, ts.unwrap_or(default_indent_style))
         } else {
-            (vec![String::from("")], vec![None], /* should be config just like ::new */ TabStyle::Tab)
+            (vec![String::from("")], vec![None], default_indent_style)
         };
         let buf = Buffer {
             fs_loc: Some(path),
             lines: lns, line_layouts: lay,
             viewport_start: 0, viewport_end: 0, cursor_line: 0, cursor_col: 0, show_cursor: true,
             res: app.res.clone(),
-            tab_style: ts,
+            tab_style: ts, tab_width: default_indent_width,
             lang_server: match fp.extension().and_then(|ext| ext.to_str()) {
                 Some(ext) => app.language_server_for_file_type(ext)?,
                 None => None
@@ -94,7 +116,13 @@ impl Buffer {
             version: 0
         };
         if let Some(ref ls) = buf.lang_server {
-            ls.borrow_mut().document_did_open(&buf);
+            let mut ls = ls.borrow_mut();
+            ls.document_did_open(&buf);
+            ls.send("textDocument/documentSymbol", object!{
+                "textDocument" => object!{
+                    "uri" => String::from("file:///") + buf.fs_loc.as_ref().expect("buffer has location").to_str().unwrap(),
+                }
+            }).unwrap();
         }
         Ok(buf)
     }
@@ -379,25 +407,89 @@ impl Buffer {
         }
         self.invalidate_line(loc.1);
     }
+    
+    fn compute_line_indent(&self, line: usize) -> usize {
+        let mut i = 0;
+        let mut ch = self.lines[line].chars();
+        let spaces_in_indent = match self.tab_style {
+            TabStyle::Spaces(n) => n,
+            TabStyle::Tab => self.tab_width
+        };
+        'main: loop {
+            match ch.next() {
+                Some('\t') => { i += 1; }
+                Some(' ') => {
+                    let mut spaces = 0;
+                    'space: loop {
+                        match ch.next() {
+                            Some(' ') => {
+                                spaces += 1;
+                                if spaces % spaces_in_indent == 0 {
+                                    spaces = 0;
+                                    i += 1;
+                                }
+                            },
+                            Some('\t') => {
+                                if spaces == 0 {
+                                    i += 1;
+                                } else {
+                                    panic!("only heathens mix tabs and spaces");
+                                }
+                            },
+                            Some(_) => { break 'space },
+                            None => { break 'main }
+                        }
+                    }
+                },
+                Some(_) => {},
+                None => { break 'main }
+            }
+        }
+        i
+    }
+
+    fn indent_line(&self, ln: &mut String, i: usize) -> usize {
+        if i == 0 { return 0; }
+        let mut indent = String::new();
+        let ss = match self.tab_style {
+            TabStyle::Spaces(w) => {
+                for _ in 0..(w*i) { indent += " "; }
+                w*i
+            },
+            TabStyle::Tab => {
+                for _ in 0..i {  indent += "\t"; }
+                i
+            }
+        };
+        *ln = indent + ln;
+        return ss;
+    }
+
     pub fn break_line(&mut self) {
         let loc = self.curr_loc();
-        let new_line = if loc.0 >= self.lines[loc.1].len() {
+        let mut new_line = if loc.0 >= self.lines[loc.1].len() {
             String::from("")
         } else {
             self.lines[loc.1].split_off(loc.0)
         };
+        let indent = self.compute_line_indent(loc.1) + if new_line.len() == 0 { 1 } else { 0 };
+        let ln = self.indent_line(&mut new_line, indent);
         self.lines.insert(loc.1+1, new_line);
         self.invalidate_line(loc.1);
         self.line_layouts.insert(loc.1, None);
         self.viewport_end += 1;
-        self.cursor_col = 0; self.move_cursor((0,1));
+        self.cursor_col = ln;
+        self.move_cursor((0,1));
     }
     pub fn insert_line(&mut self, val: Option<&str>) {
         let loc = self.cursor_line;
-        self.lines.insert(loc+1, val.map(|s| String::from(s)).unwrap_or_default());
+        let mut line = val.map(|s| String::from(s)).unwrap_or_default();
+        let indent = self.compute_line_indent(loc);
+        let indent_ln = self.indent_line(&mut line, indent);
+        self.lines.insert(loc+1, line);
         self.line_layouts.insert(loc+1, None);
         self.viewport_end += 1;
-        self.cursor_col = 0; self.move_cursor((0,1));
+        self.cursor_col = indent_ln; self.move_cursor((0,1));
     }
     pub fn insert_tab(&mut self) {
         match self.tab_style {
@@ -439,6 +531,9 @@ impl Buffer {
                     write!(f, "{}\n", ln)?;
                 }
                 f.sync_all()?;
+                if let Some(ref mut ls) = self.lang_server.clone() {
+                    ls.borrow_mut().document_did_save(self);
+                }
                 Ok(())
             },
             None => Err(IoError::new(ErrorKind::NotFound, "sync_disk with no file backing"))
@@ -490,5 +585,13 @@ impl Buffer {
 
     pub fn full_text(&self) -> String {
         self.lines.iter().fold(String::new(), |a,i| a+i+"\n")
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        if let Some(ref mut ls) = self.lang_server.clone() {
+            ls.borrow_mut().document_did_close(self);
+        }
     }
 }

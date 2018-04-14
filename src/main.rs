@@ -29,8 +29,6 @@ use app::*;
 
 use std::error::Error;
 
-use futures::Future;
-
 #[derive(Debug)]
 enum ConfigError {
     Parse(Box<Error>),
