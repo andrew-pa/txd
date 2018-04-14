@@ -147,16 +147,39 @@ impl App for TxdApp {
     fn paint(&mut self, mut rx: &mut RenderContext) {
         rx.clear(Color::rgb(0.1, 0.1, 0.1));
         let bnd = rx.bounds();
-        let mut buf_ = self.state.buf();
-        let mut buf = buf_.borrow_mut();
         let res = self.state.res.borrow();
-        buf.paint(rx, Rect::xywh(4.0, 4.0, bnd.w-4.0, bnd.h-34.0));
-        
-        //draw status line
+
         let mode_tag_tl = rx.new_text_layout(self.mode.status_tag(), &res.font, bnd.w, bnd.h).expect("create mode text layout");
         let mtb = mode_tag_tl.bounds();
-        let status_y = bnd.h-mtb.h*2.2;
 
+        //draw buffer line
+        rx.set_color(Color::rgb(0.25, 0.22, 0.2));
+        rx.fill_rect(Rect::xywh(0.0, 0.0, bnd.w, mtb.h));
+        rx.set_color(Color::rgb(0.1, 0.44, 0.5));
+        rx.draw_text(Rect::xywh(4.0, 0.0, bnd.w, mtb.h), "txd", &res.font);
+        {
+        let mut x = 32.0;
+        for (i, b) in self.state.bufs.iter().enumerate() {
+            let tl = rx.new_text_layout(&format!("[{} {}]", i, 
+                     b.borrow().fs_loc.as_ref().map_or_else(|| String::from("*"),
+                        |p| format!("{}", p.strip_prefix(::std::env::current_dir().unwrap().as_path()).unwrap_or(p).display()) ),
+), &res.font, bnd.w, bnd.h).expect("create text layout");
+            if i == self.state.current_buffer {
+                rx.set_color(Color::rgb(0.80, 0.44, 0.1));
+            } else {
+                rx.set_color(Color::rgb(0.50, 0.44, 0.1));
+            }
+            rx.draw_text_layout(Point::xy(x, 0.0), &tl);
+            x += tl.bounds().w;
+        }
+        }
+
+        let mut buf_ = self.state.buf();
+        let mut buf = buf_.borrow_mut();
+        buf.paint(rx, Rect::xywh(4.0, 4.0 + mtb.h*1.1, bnd.w-4.0, bnd.h-mtb.h*3.2));
+
+        //draw status line
+        let status_y = bnd.h-mtb.h*2.2;
         rx.set_color(Color::rgb(0.25, 0.22, 0.2));
         rx.fill_rect(Rect::xywh(0.0, status_y-0.5, bnd.w, mtb.h));
         rx.set_color(Color::rgb(0.4, 0.6, 0.0));

@@ -44,7 +44,7 @@ impl<T: Write> Write for Fd<T> {
     }
 }
 
-#[cfg(any(target_op="macos", target_os="linux"))]
+#[cfg(any(target_os="macos", target_os="linux"))]
 impl<T> mio::Evented for Fd<T> where T: ::std::os::unix::prelude::AsRawFd {
     fn register(&self,
                 poll: &mio::Poll,
