@@ -26,7 +26,8 @@ pub struct State {
     pub current_buffer: usize,
     pub clipstacks: HashMap<ClipstackId, Vec<String>>,
     pub should_quit: bool,
-    pub language_servers: Vec<(Regex, Rc<RefCell<LanguageServer>>)>
+    pub language_servers: Vec<(Regex, Rc<RefCell<LanguageServer>>)>,
+    pub status_text: Option<String>
 }
 
 impl State {
@@ -106,7 +107,7 @@ impl TxdApp {
         if let Some(ref e) = le {
             println!("config error {:?}", e);
         }
-        
+
         let res = Rc::new(RefCell::new(Resources::new(rx, config).expect("create resources")));
         let buf = Rc::new(RefCell::new(Buffer::new(res.clone())));
                 //env::args().nth(1).map_or_else(|| Buffer::new(res.clone()),
@@ -121,7 +122,8 @@ impl TxdApp {
                 current_buffer: 1, last_buffer: 1,
                 clipstacks: HashMap::new(), res,
                 should_quit: false,
-                language_servers: Vec::new()
+                language_servers: Vec::new(),
+                status_text: None
             },
             mode: Box::new(mode::NormalMode::new()), last_err: le,
         }
@@ -144,7 +146,24 @@ impl App for TxdApp {
         self.state.should_quit
     }
 
-    fn paint(&mut self, mut rx: &mut RenderContext) {
+    fn paint(&mut self, rx: &mut RenderContext) {
+        for lsp in self.state.language_servers.iter() {
+            let st = &mut self.state.status_text;
+            lsp.1.borrow_mut().process_notifications(|n| {
+                match n["method"].as_str() {
+                    Some("window/progress") => {
+                        if n["params"].has_key("done") {
+                            *st = None;
+                        } else {
+                            *st = Some(format!("{}: {}", n["params"]["title"], n["params"]["message"]));
+                        }
+                    },
+                    Some(_) => println!("unknown notification {:?}", n),
+                    None => println!("invalid notification {:?}", n)
+                }
+            });
+        }
+
         rx.clear(Color::rgb(0.1, 0.1, 0.1));
         let bnd = rx.bounds();
         let res = self.state.res.borrow();
@@ -158,7 +177,7 @@ impl App for TxdApp {
         rx.set_color(Color::rgb(0.1, 0.44, 0.5));
         rx.draw_text(Rect::xywh(4.0, 0.0, bnd.w, mtb.h), "txd", &res.font);
         {
-        let mut x = 32.0;
+        let mut x = 48.0;
         for (i, b) in self.state.bufs.iter().enumerate() {
             let tl = rx.new_text_layout(&format!("[{} {}]", i, 
                      b.borrow().fs_loc.as_ref().map_or_else(|| String::from("*"),
@@ -174,7 +193,7 @@ impl App for TxdApp {
         }
         }
 
-        let mut buf_ = self.state.buf();
+        let buf_ = self.state.buf();
         let mut buf = buf_.borrow_mut();
         buf.paint(rx, Rect::xywh(4.0, 4.0 + mtb.h*1.1, bnd.w-4.0, bnd.h-mtb.h*3.2));
 
@@ -190,6 +209,9 @@ impl App for TxdApp {
                      &buf.fs_loc.as_ref().map_or_else(|| String::from("[new file]"),
                         |p| format!("{}", p.strip_prefix(::std::env::current_dir().unwrap().as_path()).unwrap_or(p).display()) ),
                      &res.font);
+        if let Some(ref s) = self.state.status_text {
+            rx.draw_text(Rect::xywh(600.0, status_y, bnd.w, 18.0), &s, &res.font);
+        }
         rx.set_color(Color::rgb(0.0, 0.6, 0.4));
         rx.draw_text(Rect::xywh(bnd.w-200.0, status_y, bnd.w, 18.0),
                      &format!("ln {} col {}", buf.cursor_line, buf.cursor_col),

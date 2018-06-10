@@ -26,14 +26,17 @@ struct ProcessInPipe(NamedPipe);
 #[cfg(target_os="windows")]
 struct ProcessOutPipe(NamedPipe);
 
+#[cfg(any(target_os="macos", target_os="linux"))]
 pub struct Fd<T>(T);
 
+#[cfg(any(target_os="macos", target_os="linux"))]
 impl<T: Read> Read for Fd<T> {
     fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
         self.0.read(bytes)
     }
 }
 
+#[cfg(any(target_os="macos", target_os="linux"))]
 impl<T: Write> Write for Fd<T> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.0.write(bytes)
@@ -186,10 +189,13 @@ impl Future for FutureResponse {
     }
 }
 
+use std::rc::Rc;
+
 pub struct LanguageServer {
     ps: Child,
     response_pool: Arc<Mutex<HashMap<usize, JsonValue>>>,
     request_queue: Arc<Mutex<VecDeque<JsonValue>>>,
+    notification_queue: Arc<Mutex<VecDeque<JsonValue>>>,
     next_id: Arc<AtomicUsize>,
     response_thread: Option<thread::JoinHandle<()>>,
     lang_id: String
@@ -283,6 +289,7 @@ impl LanguageServer {
             ps,
             response_pool: Arc::new(Mutex::new(HashMap::new())),
             request_queue: Arc::new(Mutex::new(VecDeque::new())),
+            notification_queue: Arc::new(Mutex::new(VecDeque::new())),
             next_id: Arc::new(AtomicUsize::new(1)),
             response_thread: None,
             lang_id: config.get("language-id").ok_or(ConfigError::Missing("language server id"))?.as_str()
@@ -293,21 +300,30 @@ impl LanguageServer {
         poll.register(&ins.0, mio::Token(1), mio::Ready::writable(), mio::PollOpt::level()).unwrap();
         let rq = ls.request_queue.clone();
         let rp = ls.response_pool.clone();
+        let nq = ls.notification_queue.clone();
         ls.response_thread = Some(thread::spawn(move || {
             let mut buf: [u8; 1024] = [0; 1024];
             let mut events = mio::Events::with_capacity(1024);
             let mut read_state_machine = ReadState::Waiting;
             'main: loop {
-                poll.poll(&mut events, None).unwrap();
+                match poll.poll(&mut events, None) {
+                    Ok(_) => {},
+                    Err(e) => match e.kind() {
+                        IOErrorKind::BrokenPipe => break 'main,
+                        _ => panic!("error polling {:?}", e)
+                    }
+                };
                 for event in events.iter() {
                     match event.token() {
                         mio::Token(0) => {
-                            //println!("rsm = {:?}", read_state_machine);
+                            println!("rsm = {:?}", read_state_machine);
                             read_state_machine = read_state_machine.advance(&mut out, &mut buf, |s| {
                                 println!("got: {}", s);
                                 let j = json::parse(&s).expect("parse response");
                                 if let Some(id) = j["id"].as_usize() {
                                     rp.lock().expect("lock response pool").insert(id, j); 
+                                } else {
+                                    nq.lock().expect("lock notification queue").push_back(j);
                                 }
                             });
                         }
@@ -414,6 +430,16 @@ impl LanguageServer {
         }).unwrap();
     }
 
+    pub fn process_notifications<F: FnMut(&JsonValue)>(&mut self, mut f: F) {
+        loop {
+            match self.notification_queue.lock().expect("lock notification queue").pop_front() {
+                Some(n) => {
+                    f(&n)
+                }
+                None => break
+            }
+        }
+    }
 }
 
 impl Drop for LanguageServer {

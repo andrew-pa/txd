@@ -273,7 +273,8 @@ impl Buffer {
             Movement::Rep(count, ref movement) => {
                 let mut total_range = self.movement_range(movement);
                 let cp = self.curr_loc();
-                for _ in 1..count {
+                for i in 1..count {
+                    println!("rep {:?} x {}/{} => {:?}", movement, count, i, total_range);
                     self.place_cursor(total_range.end.0, total_range.end.1);
                     let r = self.movement_range(movement);
                     if r.start.1 < total_range.start.1 || r.start.0 < total_range.start.0 {
@@ -284,6 +285,7 @@ impl Buffer {
                     }
                 }
                 self.place_cursor(cp.0, cp.1);
+                println!("rep {:?} x {} => {:?}", movement, count, total_range);
                 total_range
             }
             _ => panic!("unknown movement!")
@@ -315,6 +317,7 @@ impl Buffer {
         if incm == Inclusion::Inclusive { end.0 += 1; }
 
         if start.1 == end.1 { // all in the same line
+            if start.0 > self.lines[start.1].len() || end.0 > self.lines[start.1].len() { return removed; }
             removed.push_str(&self.lines[start.1]
                            .drain(if start.0 > end.0 { (end.0)..(start.0) } else { (start.0)..(end.0) })
                            .collect::<String>());
